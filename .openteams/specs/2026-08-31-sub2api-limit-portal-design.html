@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sub2API 配额中心 · 已批准设计</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #fbfaf7;
+      --surface: #ffffff;
+      --ink: #172033;
+      --muted: #687187;
+      --line: #e5e8ef;
+      --cobalt: #3159e8;
+      --teal: #0f9f83;
+      --violet: #7c4ee4;
+      --amber: #d68a0b;
+      --coral: #e05b52;
+      --soft-blue: #edf2ff;
+      --soft-green: #eaf8f4;
+      --soft-violet: #f2edff;
+      --shadow: 0 20px 50px rgba(36, 48, 77, .08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 8% 5%, rgba(49, 89, 232, .09), transparent 27rem),
+        radial-gradient(circle at 94% 17%, rgba(15, 159, 131, .08), transparent 24rem),
+        var(--paper);
+      color: var(--ink);
+      font-family: "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      line-height: 1.68;
+    }
+
+    a { color: var(--cobalt); text-underline-offset: 3px; }
+    code, .mono { font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace; }
+    code { padding: .12rem .35rem; border-radius: 5px; background: #f2f4f8; color: #34405a; }
+    main { width: min(1160px, calc(100% - 32px)); margin: 0 auto; padding: 34px 0 90px; }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(30px, 6vw, 72px);
+      border: 1px solid rgba(49, 89, 232, .13);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .9);
+      box-shadow: var(--shadow);
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 290px;
+      height: 290px;
+      right: -110px;
+      top: -130px;
+      border: 52px solid rgba(124, 78, 228, .07);
+      border-radius: 50%;
+    }
+    .eyebrow { margin: 0 0 14px; color: var(--cobalt); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { max-width: 850px; margin: 0; font-family: Sora, system-ui, sans-serif; font-size: clamp(2.25rem, 6vw, 4.7rem); line-height: 1.05; letter-spacing: -.055em; }
+    .lede { max-width: 760px; margin: 24px 0 0; color: var(--muted); font-size: 1.08rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 30px; }
+    .chip { padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: #46506a; font-size: .86rem; font-weight: 700; }
+    .chip.blue { color: var(--cobalt); background: var(--soft-blue); border-color: #dbe3ff; }
+    .chip.green { color: #087b67; background: var(--soft-green); border-color: #cef0e6; }
+
+    nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; }
+    nav a { padding: 8px 12px; border-radius: 7px; background: rgba(255,255,255,.75); border: 1px solid var(--line); color: #424d66; text-decoration: none; font-size: .9rem; }
+    nav a:hover { border-color: #b9c6f8; color: var(--cobalt); }
+
+    section { margin-top: 52px; scroll-margin-top: 22px; }
+    .section-head { display: grid; grid-template-columns: 165px 1fr; gap: 28px; align-items: start; margin-bottom: 22px; }
+    .section-no { color: var(--cobalt); font: 800 .8rem/1 Sora, system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; padding-top: 9px; }
+    h2 { margin: 0; font-family: Sora, system-ui, sans-serif; font-size: clamp(1.65rem, 3.5vw, 2.45rem); line-height: 1.18; letter-spacing: -.035em; }
+    h3 { margin: 0 0 8px; font-size: 1rem; }
+    p { margin: 0 0 12px; }
+
+    .callout { padding: 20px 22px; border-left: 4px solid var(--amber); border-radius: 8px; background: #fff8e9; color: #604715; }
+    .callout strong { color: #3e2d0c; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card { min-width: 0; padding: 21px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 26px rgba(42, 53, 79, .045); }
+    .card p, .card li { color: var(--muted); font-size: .93rem; }
+    .card.blue { border-top: 3px solid var(--cobalt); }
+    .card.green { border-top: 3px solid var(--teal); }
+    .card.violet { border-top: 3px solid var(--violet); }
+    .card.amber { border-top: 3px solid var(--amber); }
+    .card.coral { border-top: 3px solid var(--coral); }
+    ul { margin: 10px 0 0; padding-left: 1.2rem; }
+    li + li { margin-top: 6px; }
+
+    .flow { display: grid; grid-template-columns: 1fr auto 1.15fr auto 1fr; gap: 12px; align-items: stretch; }
+    .node { display: flex; flex-direction: column; justify-content: center; min-height: 122px; padding: 20px; border-radius: 10px; background: #fff; border: 1px solid var(--line); }
+    .node strong { display: block; margin-bottom: 7px; }
+    .node span { color: var(--muted); font-size: .88rem; }
+    .arrow { display: grid; place-items: center; color: var(--cobalt); font-size: 1.4rem; font-weight: 900; }
+
+    .timeline { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+    .timeline article { padding: 22px; }
+    .timeline article + article { border-left: 1px solid var(--line); }
+    .time { display: inline-block; margin-bottom: 10px; color: var(--cobalt); font: 800 1.35rem/1 Sora, sans-serif; }
+
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+    table { width: 100%; border-collapse: collapse; min-width: 680px; font-size: .9rem; }
+    th, td { padding: 13px 15px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    tr:last-child td { border-bottom: 0; }
+    th { color: #566078; background: #f7f8fb; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
+    td:first-child { color: #2f3b56; font-family: "JetBrains Mono", Consolas, monospace; }
+
+    .palette { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .swatch { width: 92px; padding: 54px 10px 9px; border-radius: 8px; color: white; font-size: .7rem; font-weight: 800; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+    .swatch:nth-child(1) { background: var(--ink); }
+    .swatch:nth-child(2) { background: var(--cobalt); }
+    .swatch:nth-child(3) { background: var(--teal); }
+    .swatch:nth-child(4) { background: var(--violet); }
+    .swatch:nth-child(5) { background: var(--amber); }
+    .swatch:nth-child(6) { background: var(--coral); }
+
+    .decision { display: grid; grid-template-columns: 12px 1fr; gap: 14px; align-items: start; }
+    .dot { width: 10px; height: 10px; margin-top: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 5px var(--soft-green); }
+    footer { margin-top: 62px; padding: 24px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+
+    @media (max-width: 780px) {
+      main { width: min(100% - 22px, 1160px); padding-top: 12px; }
+      .hero { padding: 28px 22px; }
+      .section-head { grid-template-columns: 1fr; gap: 7px; }
+      .grid, .grid.two, .timeline { grid-template-columns: 1fr; }
+      .timeline article + article { border-left: 0; border-top: 1px solid var(--line); }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); min-height: 22px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">Approved system design · 2026-08-31</p>
+    <h1>Sub2API<br>配额中心</h1>
+    <p class="lede">为真实 Sub2API Key 增加一个独立、可审计的用户门户：展示用户自己的 5h / 7d 美金额度，并把管理员选定的账号池 5h / 7d 状态安全地公开给全体登录用户。</p>
+    <div class="chips">
+      <span class="chip blue">Go 1.26</span><span class="chip">SQLite / WAL</span><span class="chip">Vue 3 SPA</span><span class="chip green">单二进制交付</span><span class="chip">Sub2API v0.1.183</span>
+    </div>
+    <nav aria-label="文档目录">
+      <a href="#principles">核心决策</a><a href="#architecture">架构</a><a href="#identity">身份与绑定</a><a href="#sync">同步</a><a href="#api">接口</a><a href="#ui">界面</a><a href="#security">安全</a><a href="#delivery">交付</a>
+    </nav>
+  </header>
+
+  <section id="principles">
+    <div class="section-head"><div class="section-no">01 · Decisions</div><h2>先锁定执行边界，再谈展示</h2></div>
+    <div class="callout"><strong>唯一的配额执行者是 Sub2API。</strong> 门户不代理模型请求、不保存分发 Key 原文、不建立第二套计费账本。上游必须处于非 <code>simple</code> 模式，并在真实 Key 上同时配置正数 <code>rate_limit_5h</code> 与 <code>rate_limit_7d</code>。</div>
+    <div class="grid" style="margin-top:14px">
+      <article class="card blue"><h3>兼容基线</h3><p>官方 Sub2API <code>v0.1.183</code>。只调用五类既定 Admin API，不依赖上游内部数据库。</p></article>
+      <article class="card green"><h3>状态而非账本</h3><p>SQLite 保存用户、会话、绑定、公开选择和最后快照；不保存历史计费流水。</p></article>
+      <article class="card violet"><h3>明确接受</h3><p>沿用上游原生滚动窗口语义，也接受高并发临界点可能出现的少量超额。</p></article>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <div class="section-head"><div class="section-no">02 · Architecture</div><h2>回环监听的 sidecar，浏览器与模型流量完全分离</h2></div>
+    <div class="flow" aria-label="系统数据流">
+      <div class="node"><strong>浏览器</strong><span>登录、我的 Key、公开账号池、管理员后台</span></div>
+      <div class="arrow">→</div>
+      <div class="node" style="border-top:3px solid var(--cobalt)"><strong>Nginx → Portal</strong><span>HTTPS 终止；Go 标准库 HTTP；Vue 通过 go:embed 内嵌</span></div>
+      <div class="arrow">↔</div>
+      <div class="node"><strong>SQLite + Sub2API</strong><span>本地身份/快照；Admin API 只读同步</span></div>
+    </div>
+    <div class="grid two" style="margin-top:14px">
+      <article class="card"><h3>模型请求路径</h3><p>模型客户端携带真实 Key 直接访问 Sub2API。门户不在数据面，因此自身故障不会改变已有 Key 的调用路径。</p></article>
+      <article class="card"><h3>控制与展示路径</h3><p>管理员通过门户绑定已有 Key、发布账号；同步器取得状态并写入最后快照，用户页面只读该快照。</p></article>
+    </div>
+  </section>
+
+  <section id="identity">
+    <div class="section-head"><div class="section-no">03 · Identity</div><h2>单管理员、单 Key 绑定、可撤销会话</h2></div>
+    <div class="grid">
+      <article class="card blue"><h3>首次初始化</h3><ul><li>启动生成 30 分钟 Setup Token</li><li>创建唯一管理员</li><li>校验 Base URL、Admin API Key、固定 Key 所有者</li><li>明确确认非 simple 模式</li></ul></article>
+      <article class="card green"><h3>普通用户</h3><ul><li>一个当前 Key，数据库唯一约束</li><li>只看自己的额度与全局公开账号</li><li>可以自行修改密码</li><li>不能读取完整 Key</li></ul></article>
+      <article class="card violet"><h3>管理员</h3><ul><li>创建用户时原子绑定 Key</li><li>停用、软删除、重置密码、换绑/解绑</li><li>选择公开账号池</li><li>维护上游连接设置</li></ul></article>
+    </div>
+    <p style="margin-top:15px;color:var(--muted)">停用、重置密码或软删除会撤销目标用户的全部会话；软删除不会修改或删除上游 Key。上游 Key 消失时绑定进入“需要换绑”，限额不合规时进入“配置异常”，系统不按名称自动猜测替代 Key。</p>
+  </section>
+
+  <section id="sync">
+    <div class="section-head"><div class="section-no">04 · Synchronization</div><h2>三个独立节奏，一套清晰的新鲜度语义</h2></div>
+    <div class="timeline">
+      <article><span class="time">15s</span><h3>固定所有者 Key</h3><p>45 秒没有成功结果即陈旧；完整 Key 和最后使用 IP 解析后立即丢弃。</p></article>
+      <article><span class="time">5min</span><h3>账号目录</h3><p>更新管理员可发布清单；邮箱在普通用户视图中脱敏，无邮箱使用持久化随机别名。</p></article>
+      <article><span class="time">60s</span><h3>已公开账号用量</h3><p>调用批量接口且 <code>force:false</code>；保留官方 <code>updated_at</code>，不承诺数据本身每分钟变化。</p></article>
+    </div>
+    <div class="grid two" style="margin-top:14px">
+      <article class="card amber"><h3>可靠性</h3><p>最多 4 个并发任务；同类触发 singleflight 合并；带抖动重试并指数退避，最高 5 分钟。</p></article>
+      <article class="card coral"><h3>失败呈现</h3><p>上游 401、429、5xx、超时或 schema 错误都保留最后成功快照，并返回 <span class="mono">as_of / last_success_at / stale</span>。</p></article>
+    </div>
+  </section>
+
+  <section id="api">
+    <div class="section-head"><div class="section-no">05 · Interfaces</div><h2>统一 envelope，角色边界落在服务端</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>接口组</th><th>用途</th><th>访问策略</th></tr></thead>
+        <tbody>
+          <tr><td>/healthz · /readyz</td><td>进程存活；初始化、数据库与主密钥就绪</td><td>无需会话；ready 不依赖上游在线</td></tr>
+          <tr><td>/api/setup/*</td><td>初始化状态与一次性完成向导</td><td>仅未初始化时可变更，要求有效 Setup Token</td></tr>
+          <tr><td>/api/auth/*</td><td>会话、登录、注销、改密</td><td>Cookie 会话；变更需要 CSRF</td></tr>
+          <tr><td>/api/me/dashboard</td><td>我的 Key 额度及公开账号池</td><td>任何已启用登录用户</td></tr>
+          <tr><td>/api/admin/users</td><td>用户、密码重置、Key 绑定</td><td>仅管理员</td></tr>
+          <tr><td>/api/admin/upstream-keys</td><td>掩码 Key、限额合规与占用状态</td><td>仅管理员</td></tr>
+          <tr><td>/api/admin/pool</td><td>账号清单和公开选择</td><td>仅管理员</td></tr>
+          <tr><td>/api/admin/settings · sync</td><td>连接设置和手动同步</td><td>仅管理员，审计变更</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:15px">成功响应：<code>{"data": ...}</code>；错误响应：<code>{"error":{"code":"...","message":"..."}}</code>。公开窗口类型固定为 <code>KeyWindowView</code>、<code>PoolWindowView</code> 与 <code>SnapshotMeta</code>；空 <code>reset_at</code> 表示“尚未启动”，Provider 缺失窗口必须显示“未提供”。</p>
+  </section>
+
+  <section id="ui">
+    <div class="section-head"><div class="section-no">06 · Experience</div><h2>浅色、克制而有生命力的状态界面</h2></div>
+    <div class="grid two">
+      <article class="card"><h3>信息结构</h3><p>登录、初始化、普通用户工作台、用户管理、账号池、连接设置。工作台以“我的 Key”状态带开场，随后是全平台公开账号表；管理编辑统一使用右侧抽屉。</p></article>
+      <article class="card"><h3>动态反馈</h3><p>数字补间、额度环、进度条、列表交错、筛选重排、抽屉、骨架屏和 Toast。键盘焦点完整可见，并尊重 <code>prefers-reduced-motion</code>。</p></article>
+    </div>
+    <div class="palette" aria-label="批准色板">
+      <div class="swatch">墨色</div><div class="swatch">钴蓝</div><div class="swatch">青绿</div><div class="swatch">紫色</div><div class="swatch">琥珀</div><div class="swatch">珊瑚</div>
+    </div>
+    <p style="margin-top:13px;color:var(--muted)">暖白底，圆角 6–8px；内嵌 Noto Sans SC、Sora、JetBrains Mono，避免生产环境依赖外部字体 CDN。</p>
+  </section>
+
+  <section id="security">
+    <div class="section-head"><div class="section-no">07 · Security</div><h2>秘密最小化，但不掩盖全权限凭据风险</h2></div>
+    <div class="grid">
+      <article class="card green"><h3>凭据</h3><p>密码 Argon2id；Admin API Key AES-256-GCM；主密钥只在环境；会话只存 Token 摘要；分发 Key 仅存掩码。</p></article>
+      <article class="card amber"><h3>网络</h3><p>默认监听 <code>127.0.0.1:2560</code>；生产 HTTPS；禁止上游重定向、限制响应大小与超时；私网 HTTP 必须明确确认。</p></article>
+      <article class="card coral"><h3>不可回避的风险</h3><p>Admin API Key 拥有上游全权限。数据库与主密钥同时泄露即可解密；root、管理员会话和恶意上游均不在防护范围内。</p></article>
+    </div>
+  </section>
+
+  <section id="delivery">
+    <div class="section-head"><div class="section-no">08 · Delivery</div><h2>单实例、单二进制、可回退升级</h2></div>
+    <div class="grid two">
+      <article class="card blue"><h3>运行形态</h3><ul><li>Linux amd64 / arm64</li><li>加固 systemd unit</li><li>Nginx HTTPS 示例</li><li>环境文件权限 0640</li><li>状态目录权限 0750</li></ul></article>
+      <article class="card violet"><h3>验证门槛</h3><ul><li>Go 单测、race、vet</li><li>假 Sub2API HTTP 集成测试</li><li>哨兵秘密泄露扫描</li><li>Vitest 与 TypeScript</li><li>Playwright 桌面/移动流程</li></ul></article>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="decision"><span class="dot"></span><div><strong>升级与备份决策</strong><p>安装器在停服后复制同一时刻的 <code>app.db</code>、<code>app.db-wal</code>、<code>app.db-shm</code> 与旧二进制；新服务不能稳定运行则恢复旧程序和升级前数据库快照。默认卸载保留配置和数据，永久清除要求固定路径校验与完整确认词。</p></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><div class="section-no">09 · Exclusions</div><h2>首版明确不做</h2></div>
+    <div class="card"><p>不代理模型请求；不创建、删除或展示完整上游 Key；不做多管理员、多 Key、邮件找回、MFA、趋势历史、Docker、多实例、独立计费核验或 Provider 缺失窗口推算。更换 Base URL 或固定所有者之前必须先解绑用户、取消账号发布，再轮换连接标识并清空旧快照。</p></div>
+  </section>
+
+  <footer>Sub2API 配额中心 · 已批准设计记录 · 2026-08-31 · 实现计划见 <code>.openteams/plans/2026-08-31-sub2api-limit-portal.md</code></footer>
+</main>
+</body>
+</html>

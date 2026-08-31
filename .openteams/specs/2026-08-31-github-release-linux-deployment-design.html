@@ -82,7 +82,7 @@
     <section>
       <h2>1. 已确认决策</h2>
       <div class="decision">
-        应用默认监听 <code>0.0.0.0:2556</code>，但浏览器入口必须使用 Nginx HTTPS；<code>SUB2API_LIMIT_COOKIE_SECURE=true</code> 保持默认开启。
+        应用默认监听 <code>0.0.0.0:2556</code>，允许浏览器直接使用 <code>http://服务器IP:2556</code>；<code>SUB2API_LIMIT_COOKIE_SECURE=false</code>，Nginx HTTPS 作为可选配置。
       </div>
       <ul>
         <li>目标仓库：<code>https://github.com/MengStar-L/sub2api5hlimit</code>，当前为空。</li>
@@ -94,14 +94,14 @@
 
     <section>
       <h2>2. 网络与安全边界</h2>
-      <p class="flow">浏览器 → HTTPS :443 → Nginx → HTTP 127.0.0.1:2556 → Go 服务</p>
+      <p class="flow">浏览器 → HTTP :2556 → Go 服务；可选：浏览器 → HTTPS :443 → Nginx → HTTP :2556</p>
       <ul>
         <li>Go 服务绑定所有 IPv4 接口，满足 <code>0.0.0.0:2556</code> 的部署要求。</li>
-        <li>Nginx 终止 TLS，并传递 <code>Host</code>、<code>X-Forwarded-For</code> 与 <code>X-Forwarded-Proto=https</code>。</li>
-        <li>README 明确要求安全组或防火墙禁止互联网直接访问 TCP 2556，只对外开放 80/443。</li>
-        <li>公网用户不得绕过 Nginx 使用明文 <code>http://IP:2556</code>，否则登录密码、Setup Token 和会话数据缺少传输加密。</li>
+        <li>默认允许公网直接访问 TCP 2556，不由安装器管理防火墙或安全组。</li>
+        <li>Nginx 示例保留，供管理员自行选择 HTTPS、域名和证书配置。</li>
+        <li>README 说明明文 HTTP 没有传输加密，但不把 HTTPS 设为安装前置条件。</li>
       </ul>
-      <div class="warning"><span class="risk">注意：</span>“监听所有接口”与“允许明文公网直连”不是同一安全决策。本设计执行前者，同时通过防火墙和 HTTPS 反代阻止后者。</div>
+      <div class="warning"><span class="risk">责任边界：</span>安装器只负责服务正常监听公网端口；TLS、防火墙和访问控制由部署管理员自行配置。</div>
     </section>
 
     <section>
@@ -144,7 +144,7 @@ git push origin v0.1.0</code></pre>
         <li>若仅检测到旧版 <code>/usr/local</code>、<code>/etc/sub2api-limit-portal</code> 或 <code>/var/lib/sub2api-limit-portal</code> 布局，安装器立即中止并指向 README 的人工迁移步骤，不生成新主密钥或空数据库。</li>
         <li>首次安装自动启用并启动服务，管理员通过 <code>journalctl</code> 获取 30 分钟 Setup Token。</li>
         <li>再次运行同版本或新版本安装器视为升级：停止服务，一致备份 SQLite/WAL/SHM，替换二进制，失败则回滚。</li>
-        <li>README 提供 <code>start</code>、<code>stop</code>、<code>restart</code>、<code>status</code>、<code>enable</code>、<code>journalctl</code>、备份和卸载命令。</li>
+        <li>README 提供公网 HTTP 访问地址、可选 Nginx 配置，以及 <code>start</code>、<code>stop</code>、<code>restart</code>、<code>status</code>、<code>enable</code>、<code>journalctl</code>、备份和卸载命令。</li>
       </ul>
     </section>
 
@@ -168,7 +168,7 @@ git push origin v0.1.0</code></pre>
       </ul>
     </section>
 
-    <footer>规格状态：已完成内部一致性、歧义、占位符与范围检查，等待用户书面确认。</footer>
+    <footer>规格状态：用户已确认，并按最新要求修订为默认公网 HTTP 直连；实现已完成并通过本地验收。</footer>
   </main>
 </body>
 </html>

@@ -1,0 +1,149 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify, build, and publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.26.x'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node <<'NODE'
+          const tag = process.env.RELEASE_TAG ?? ''
+          const match = tag.match(/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/)
+          const invalidNumericPrerelease = match?.[4]
+            ?.split('.')
+            .some(identifier => /^\d+$/.test(identifier) && identifier.length > 1 && identifier.startsWith('0'))
+          if (!match || invalidNumericPrerelease) {
+            console.error(`Tag ${JSON.stringify(tag)} is not a strict SemVer 2.0.0 tag such as v1.2.3 or v1.2.3-rc.1`)
+            process.exit(1)
+          }
+          console.log(`Validated release tag ${tag}`)
+          NODE
+
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
+
+      - name: Type-check frontend
+        run: npm --prefix web run typecheck
+
+      - name: Test frontend
+        run: npm --prefix web run test
+
+      - name: Build embedded frontend
+        run: npm --prefix web run build
+
+      - name: Test Go packages
+        run: go test ./...
+
+      - name: Vet Go packages
+        run: go vet ./...
+
+      - name: Build and package Linux releases
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          source_date_epoch="$(git log -1 --format=%ct)"
+          release_dir="$(mktemp -d "${RUNNER_TEMP}/sub2api-release.XXXXXXXX")"
+          stage_dir="${release_dir}/stage"
+          assets_dir="${release_dir}/assets"
+          mkdir -p "${stage_dir}" "${assets_dir}"
+
+          for arch in amd64 arm64; do
+            package="sub2api5hlimit-${tag}-linux-${arch}"
+            package_root="${stage_dir}/${package}"
+            binary="sub2api-limit-portal-linux-${arch}"
+            archive="${assets_dir}/${package}.tar.gz"
+
+            mkdir -p "${package_root}/dist"
+            cp -a packaging scripts "${package_root}/"
+            install -m 0644 README.md SECURITY.md "${package_root}/"
+            chmod 0755 "${package_root}/scripts/install.sh" "${package_root}/scripts/uninstall.sh"
+
+            CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" \
+              go build -trimpath -ldflags "-s -w -X main.version=${version}" \
+              -o "${package_root}/dist/${binary}" ./cmd/sub2api-limit-portal
+
+            tar --sort=name --mtime="@${source_date_epoch}" --owner=0 --group=0 --numeric-owner \
+              -C "${stage_dir}" -czf "${archive}" "${package}"
+
+            archive_contents="$(tar -tzf "${archive}")"
+            for required_path in \
+              "${package}/dist/${binary}" \
+              "${package}/packaging/sub2api-limit-portal.service" \
+              "${package}/packaging/nginx-sub2api-limit-portal.conf" \
+              "${package}/scripts/install.sh" \
+              "${package}/scripts/uninstall.sh" \
+              "${package}/README.md" \
+              "${package}/SECURITY.md"; do
+              grep -Fxq "${required_path}" <<<"${archive_contents}"
+            done
+          done
+
+          cd "${assets_dir}"
+          archives=(
+            "sub2api5hlimit-${tag}-linux-amd64.tar.gz"
+            "sub2api5hlimit-${tag}-linux-arm64.tar.gz"
+          )
+          sha256sum "${archives[@]}" > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          printf 'RELEASE_ASSETS_DIR=%s\n' "${assets_dir}" >> "${GITHUB_ENV}"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          release_args=(
+            release create "${GITHUB_REF_NAME}"
+            "${RELEASE_ASSETS_DIR}/sub2api5hlimit-${GITHUB_REF_NAME}-linux-amd64.tar.gz"
+            "${RELEASE_ASSETS_DIR}/sub2api5hlimit-${GITHUB_REF_NAME}-linux-arm64.tar.gz"
+            "${RELEASE_ASSETS_DIR}/SHA256SUMS"
+            --verify-tag
+            --title "${GITHUB_REF_NAME}"
+            --generate-notes
+          )
+          version_without_build="${GITHUB_REF_NAME%%+*}"
+          if [[ "${version_without_build}" == *-* ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh "${release_args[@]}"
