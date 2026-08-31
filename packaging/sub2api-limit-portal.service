@@ -1,0 +1,54 @@
+[Unit]
+Description=Sub2API quota portal
+Documentation=https://github.com/MengStar-L/sub2api5hlimit
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=sub2api-limit-portal
+Group=sub2api-limit-portal
+WorkingDirectory=/opt/sub2api5hlimit/data
+EnvironmentFile=/opt/sub2api5hlimit/config/sub2api-limit-portal.env
+ExecStart=/opt/sub2api5hlimit/bin/sub2api-limit-portal serve
+Restart=on-failure
+RestartSec=3s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+UMask=0077
+
+# The installer owns the persistent layout; systemd creates only runtime state.
+RuntimeDirectory=sub2api-limit-portal
+RuntimeDirectoryMode=0750
+
+# The service only needs its data directory, the network and the journal.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ReadWritePaths=/opt/sub2api5hlimit/data
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target
