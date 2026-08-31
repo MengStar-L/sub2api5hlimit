@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sub2API 配额中心 GitHub 发布与 Linux 部署设计</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f7f9f6;
+      --surface: #ffffff;
+      --ink: #17221d;
+      --muted: #63716a;
+      --line: #dce4df;
+      --blue: #245eea;
+      --green: #078b6f;
+      --amber: #ad6800;
+      --coral: #c6463a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.7 "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: #13241d;
+      color: #f7fbf8;
+    }
+    header div, main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; }
+    header div { padding: 48px 0 40px; }
+    .eyebrow { color: #72d9bb; font-weight: 700; }
+    h1 { margin: 8px 0 12px; font-size: clamp(28px, 5vw, 48px); line-height: 1.2; }
+    header p { max-width: 760px; margin: 0; color: #c8d8d0; }
+    main { padding: 36px 0 64px; }
+    section { padding: 28px 0; border-bottom: 1px solid var(--line); }
+    h2 { margin: 0 0 14px; font-size: 23px; }
+    h3 { margin: 22px 0 8px; font-size: 17px; }
+    p, ul, ol { margin: 8px 0 0; }
+    ul, ol { padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    code {
+      padding: 2px 5px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #edf2ef;
+      color: #18392d;
+      font-family: "JetBrains Mono", Consolas, monospace;
+    }
+    pre {
+      overflow-x: auto;
+      padding: 18px;
+      border-left: 4px solid var(--blue);
+      background: #10211a;
+      color: #e8f2ed;
+      font: 13px/1.65 "JetBrains Mono", Consolas, monospace;
+    }
+    pre code { padding: 0; border: 0; background: transparent; color: inherit; }
+    table { width: 100%; margin-top: 14px; border-collapse: collapse; background: var(--surface); }
+    th, td { padding: 11px 13px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #edf3ef; }
+    .decision { border-left: 4px solid var(--green); padding: 12px 16px; background: #eaf8f3; }
+    .warning { border-left: 4px solid var(--amber); padding: 12px 16px; background: #fff6e5; }
+    .risk { color: var(--coral); font-weight: 700; }
+    .flow { color: var(--blue); font-weight: 700; }
+    footer { padding-top: 24px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <span class="eyebrow">发布规格 · 2026-08-31</span>
+      <h1>GitHub Release 与 Linux systemd 部署</h1>
+      <p>将现有 Sub2API 配额中心发布到 MengStar-L/sub2api5hlimit，通过语义化 Tag 自动构建 Linux 双架构产物，并把运行文件统一安装到 /opt/sub2api5hlimit。</p>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>1. 已确认决策</h2>
+      <div class="decision">
+        应用默认监听 <code>0.0.0.0:2556</code>，但浏览器入口必须使用 Nginx HTTPS；<code>SUB2API_LIMIT_COOKIE_SECURE=true</code> 保持默认开启。
+      </div>
+      <ul>
+        <li>目标仓库：<code>https://github.com/MengStar-L/sub2api5hlimit</code>，当前为空。</li>
+        <li>首个版本：<code>v0.1.0</code>，推送 Tag 后触发自动构建和 GitHub Release。</li>
+        <li>产品名与二进制/服务名继续使用 <code>sub2api-limit-portal</code>，避免不必要的运行兼容性变化。</li>
+        <li>Go module 更新为 <code>github.com/MengStar-L/sub2api5hlimit</code>，文档链接同步指向新仓库。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>2. 网络与安全边界</h2>
+      <p class="flow">浏览器 → HTTPS :443 → Nginx → HTTP 127.0.0.1:2556 → Go 服务</p>
+      <ul>
+        <li>Go 服务绑定所有 IPv4 接口，满足 <code>0.0.0.0:2556</code> 的部署要求。</li>
+        <li>Nginx 终止 TLS，并传递 <code>Host</code>、<code>X-Forwarded-For</code> 与 <code>X-Forwarded-Proto=https</code>。</li>
+        <li>README 明确要求安全组或防火墙禁止互联网直接访问 TCP 2556，只对外开放 80/443。</li>
+        <li>公网用户不得绕过 Nginx 使用明文 <code>http://IP:2556</code>，否则登录密码、Setup Token 和会话数据缺少传输加密。</li>
+      </ul>
+      <div class="warning"><span class="risk">注意：</span>“监听所有接口”与“允许明文公网直连”不是同一安全决策。本设计执行前者，同时通过防火墙和 HTTPS 反代阻止后者。</div>
+    </section>
+
+    <section>
+      <h2>3. 安装布局</h2>
+      <table>
+        <thead><tr><th>用途</th><th>路径</th><th>权限/所有者</th></tr></thead>
+        <tbody>
+          <tr><td>安装根目录</td><td><code>/opt/sub2api5hlimit</code></td><td><code>root:root 0755</code></td></tr>
+          <tr><td>程序</td><td><code>/opt/sub2api5hlimit/bin/sub2api-limit-portal</code></td><td><code>root:root 0755</code></td></tr>
+          <tr><td>环境配置</td><td><code>/opt/sub2api5hlimit/config/sub2api-limit-portal.env</code></td><td><code>root:sub2api-limit-portal 0640</code></td></tr>
+          <tr><td>SQLite</td><td><code>/opt/sub2api5hlimit/data/app.db</code></td><td><code>sub2api-limit-portal 0750</code></td></tr>
+          <tr><td>升级备份</td><td><code>/opt/sub2api5hlimit/backups</code></td><td><code>root:root 0700</code></td></tr>
+          <tr><td>卸载器</td><td><code>/opt/sub2api5hlimit/uninstall.sh</code></td><td><code>root:root 0755</code></td></tr>
+          <tr><td>systemd unit</td><td><code>/etc/systemd/system/sub2api-limit-portal.service</code></td><td><code>root:root 0644</code></td></tr>
+        </tbody>
+      </table>
+      <p>systemd 继续使用低权限账号运行。由于 <code>ProtectSystem=strict</code> 会把 <code>/opt</code> 设为只读，unit 仅通过 <code>ReadWritePaths=/opt/sub2api5hlimit/data</code> 授权数据库目录写入。</p>
+    </section>
+
+    <section>
+      <h2>4. 自动发布</h2>
+      <p>新增 <code>.github/workflows/release.yml</code>，仅在匹配 <code>v*</code> 的 Tag 推送时运行：</p>
+      <ol>
+        <li>检出源码，安装 Go 1.26 与 Node.js 22。</li>
+        <li>执行 Vue typecheck、Vitest、生产构建，以及 <code>go test ./...</code>、<code>go vet ./...</code>。</li>
+        <li>从 Tag 注入程序版本，以 <code>CGO_ENABLED=0</code> 构建 Linux amd64 与 arm64。</li>
+        <li>每个架构生成独立 <code>tar.gz</code>，内含既定的 <code>dist/</code>、<code>packaging/</code>、<code>scripts/</code> 和 README 布局。</li>
+        <li>生成 SHA-256 清单，使用仓库自带的 <code>GITHUB_TOKEN</code> 创建 GitHub Release 并上传产物。</li>
+      </ol>
+      <pre><code>git push origin main
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0</code></pre>
+    </section>
+
+    <section>
+      <h2>5. 安装与升级体验</h2>
+      <ul>
+        <li>Linux 用户从 Release 下载与 CPU 架构对应的压缩包和 <code>SHA256SUMS</code>。</li>
+        <li>校验、解压后运行 <code>sudo bash scripts/install.sh</code>；安装器创建服务账号、主密钥、目录和 unit。</li>
+        <li>若仅检测到旧版 <code>/usr/local</code>、<code>/etc/sub2api-limit-portal</code> 或 <code>/var/lib/sub2api-limit-portal</code> 布局，安装器立即中止并指向 README 的人工迁移步骤，不生成新主密钥或空数据库。</li>
+        <li>首次安装自动启用并启动服务，管理员通过 <code>journalctl</code> 获取 30 分钟 Setup Token。</li>
+        <li>再次运行同版本或新版本安装器视为升级：停止服务，一致备份 SQLite/WAL/SHM，替换二进制，失败则回滚。</li>
+        <li>README 提供 <code>start</code>、<code>stop</code>、<code>restart</code>、<code>status</code>、<code>enable</code>、<code>journalctl</code>、备份和卸载命令。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>6. 验收标准</h2>
+      <ul>
+        <li>配置单测断言默认监听为 <code>0.0.0.0:2556</code>。</li>
+        <li>安装、卸载和 unit 的默认目标不再使用旧的 <code>/usr/local</code>、<code>/var/lib/sub2api-limit-portal</code> 或端口 <code>2560</code>；旧路径只允许出现在明确的遗留安装检测中。</li>
+        <li>应用测试、Vue 测试、构建、Playwright、Go vet 全部通过。</li>
+        <li>工作流 YAML 可解析，Tag 版本校验、Release 文件名和校验和一致。</li>
+        <li>远端 <code>main</code> 分支包含完整源码，<code>v0.1.0</code> 指向发布提交，GitHub Actions 被触发并最终成功。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>7. 明确不做</h2>
+      <ul>
+        <li>不增加 Go 原生 TLS、Docker、多实例部署或自动申请证书。</li>
+        <li>不把编译产物提交进 Git 历史；产物只进入 GitHub Release。</li>
+        <li>不修改配额、认证、同步和前端业务行为。</li>
+      </ul>
+    </section>
+
+    <footer>规格状态：已完成内部一致性、歧义、占位符与范围检查，等待用户书面确认。</footer>
+  </main>
+</body>
+</html>
