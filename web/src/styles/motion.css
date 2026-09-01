@@ -12,9 +12,10 @@
   to { opacity: 1; transform: none; }
 }
 
-@keyframes slide-in {
-  from { opacity: 0; transform: translate3d(-10px, 0, 0); }
-  to { opacity: 1; transform: none; }
+/* 横向入场，并保留垂直居中位移（终帧不可用 transform: none，否则会覆盖 translateY(-50%)） */
+@keyframes slide-in-centered {
+  from { opacity: 0; transform: translate3d(-10px, -50%, 0); }
+  to { opacity: 1; transform: translate3d(0, -50%, 0); }
 }
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }

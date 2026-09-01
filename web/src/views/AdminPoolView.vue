@@ -53,7 +53,7 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <AppShell>
+  <AppShell wide>
     <header class="page-heading"><div><span class="eyebrow"><ServerCog :size="13" /> 公开账号池</span><h1>账号发布</h1><p>选择普通用户可见的账号状态；邮箱将在用户端脱敏。</p></div><button class="secondary-button" type="button" @click="load(true)"><RefreshCw :size="15" :class="{ spinning: refreshing }" />同步清单</button></header>
 
     <div class="metric-row stagger"><div><span class="metric-dot mint"></span><strong class="numeral">{{ accounts.length }}</strong><small>账号总数</small></div><div><span class="metric-dot cobalt"></span><strong class="numeral">{{ publishedCount }}</strong><small>已公开</small></div><div><span class="metric-dot amber"></span><strong class="numeral">{{ selected.size }}</strong><small>当前选择</small></div><div class="metric-note"><Eye :size="15" /><span>用户只看到脱敏账号和用量窗口</span></div></div>

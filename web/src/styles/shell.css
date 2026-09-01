@@ -78,7 +78,7 @@
   border-radius: 99px;
   background: var(--plum);
   transform: translateY(-50%);
-  animation: slide-in var(--dur-2) var(--ease-out) both;
+  animation: slide-in-centered var(--dur-2) var(--ease-out) both;
 }
 
 /* 侧栏底部 */
@@ -174,6 +174,8 @@
   margin: 0 auto;
   padding: 40px 24px 72px;
 }
+/* 数据密集页（账号池、用户管理）铺开使用剩余横向空间 */
+.page-main.wide { max-width: var(--page-max-wide); }
 
 /* ── 页头：眉标 + 大标题 + 说明，右侧动作 ── */
 .page-heading {

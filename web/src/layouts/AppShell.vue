@@ -11,6 +11,8 @@ import { sessionStore } from '@/state/session'
 import { announcementStore } from '@/state/announcements'
 import { codexStore } from '@/state/codex'
 
+const props = withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
+
 const router = useRouter()
 const mobileOpen = ref(false)
 
@@ -68,7 +70,7 @@ async function logout() {
 
     <div class="shell-main">
       <button class="icon-button menu-button" type="button" aria-label="打开导航" @click="mobileOpen = true"><Menu :size="20" /></button>
-      <main class="page-main"><slot /></main>
+      <main class="page-main" :class="{ wide: props.wide }"><slot /></main>
     </div>
 
     <nav class="mobile-nav" aria-label="移动端导航">

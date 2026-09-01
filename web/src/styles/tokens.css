@@ -64,7 +64,8 @@
 
   /* 尺度 */
   --rail: 236px;
-  --page-max: 1180px;
+  --page-max: 1320px;
+  --page-max-wide: 1680px;
   --radius: 10px;
   --radius-sm: 7px;
   --radius-lg: 16px;

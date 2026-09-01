@@ -283,7 +283,7 @@ onBeforeUnmount(stopJobPolling)
 </script>
 
 <template>
-  <AppShell>
+  <AppShell wide>
     <header class="page-heading">
       <div><span class="eyebrow"><Users :size="13" /> 平台权限</span><h1>用户管理</h1><p>创建门户用户，并为每位用户绑定一个合规 Key。</p></div>
       <div class="heading-actions"><button class="icon-button" type="button" title="刷新" @click="load(true)"><RefreshCw :size="16" :class="{ spinning: refreshing }" /></button><button class="secondary-button quota-reset-all" type="button" :disabled="batchActive || Boolean(resettingUserID)" @click="resetAllQuota"><RotateCcw :size="15" />重置全部额度</button><button class="primary-button" type="button" @click="openCreate"><UserPlus :size="16" />添加用户</button></div>
