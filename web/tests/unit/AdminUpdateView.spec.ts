@@ -35,7 +35,6 @@ describe('AdminUpdateView', () => {
     mocks.update.mockResolvedValue(structuredClone(available))
     mocks.checkUpdate.mockResolvedValue(structuredClone(available))
     mocks.applyUpdate.mockResolvedValue({ operation_id: 'op-1', target_version: 'v0.2.1', state: 'queued' })
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
   it('shows the current/latest versions and submits only the checked target', async () => {
@@ -47,6 +46,15 @@ describe('AdminUpdateView', () => {
     const install = wrapper.findAll('button').find(button => button.text().includes('安装 v0.2.1'))
     expect(install).toBeTruthy()
     await install!.trigger('click')
+    await flushPromises()
+    // 安装先弹自绘确认框，请求要等用户在弹窗里按下确认
+    expect(mocks.applyUpdate).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('替换前自动备份现有程序')
+
+    const confirm = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.modal-footer button'))
+      .find(button => button.textContent?.includes('下载并安装'))
+    expect(confirm).toBeTruthy()
+    confirm!.click()
     await flushPromises()
     expect(mocks.applyUpdate).toHaveBeenCalledWith('v0.2.1')
 	expect(wrapper.text()).toContain('已排队')

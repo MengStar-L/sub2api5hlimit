@@ -150,7 +150,6 @@ test('admin history preserves disabled status and explains skipped resets', asyn
 
 test('admin can reset one user, start a batch, and request the checked update', async ({ page }, testInfo) => {
 	await fakeAPI(page, 'admin')
-	page.on('dialog', dialog => dialog.accept())
 	await page.goto('/admin/users')
 	await page.screenshot({ path: `output/playwright/admin-users-${testInfo.project.name}.png`, fullPage: true })
 
@@ -176,6 +175,12 @@ test('admin can reset one user, start a batch, and request the checked update', 
 	await expect(page.locator('.update-overview article').filter({ hasText: '最新稳定版' }).getByText('v0.2.1', { exact: true })).toBeVisible()
 	const applyRequest = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/api/admin/update/apply'))
 	await page.getByRole('button', { name: '安装 v0.2.1' }).click()
+	const applyConfirm = page.getByRole('dialog', { name: '安装 v0.2.1' })
+	await expect(applyConfirm).toBeVisible()
+	await expect(applyConfirm.getByText('替换前自动备份现有程序，服务将短暂重启')).toBeVisible()
+	// 弹窗有淡入过渡，截图前先让动画收尾，否则留下的是半透明中间帧
+	await page.screenshot({ path: `output/playwright/admin-update-confirm-${testInfo.project.name}.png`, animations: 'disabled' })
+	await applyConfirm.getByRole('button', { name: '下载并安装' }).click()
 	expect((await applyRequest).postDataJSON()).toEqual({ target_version: 'v0.2.1' })
 	await expect(page.getByText('更新请求已提交')).toBeVisible()
 	await expect(page.getByRole('heading', { name: '正在等待服务恢复' })).toBeVisible({ timeout: 5_000 })

@@ -4,6 +4,7 @@ import { UserPlus, Search, MoreHorizontal, KeyRound, UserX, UserCheck, RefreshCw
 import AppShell from '@/layouts/AppShell.vue'
 import SideDrawer from '@/components/SideDrawer.vue'
 import ModalDialog from '@/components/ModalDialog.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import CompactQuotaCell from '@/components/CompactQuotaCell.vue'
@@ -28,7 +29,7 @@ const limitsModalOpen = ref(false)
 const limitsForm = reactive({ userId: '' as string | number, displayName: '', limit5h: 0, limit7d: 0 })
 const savingLimits = ref(false)
 const limitsError = ref('')
-const confirmDialog = reactive({ open: false, title: '', description: '', points: [] as string[], confirmLabel: '确认' })
+const confirmDialog = reactive({ open: false, title: '', description: '', points: [] as string[], confirmLabel: '确认', tone: 'default' as 'default' | 'danger' })
 let confirmAction: (() => Promise<void>) | null = null
 const batchJob = ref<QuotaResetJob | null>(null)
 const jobDetailsOpen = ref(false)
@@ -126,17 +127,25 @@ async function toggleStatus(user: AdminUser) {
   catch (cause) { toast.error('操作失败', cause instanceof ApiError ? cause.message : undefined) }
 }
 
-async function removeUser(user: AdminUser) {
-  if (!window.confirm(`确认软删除用户“${user.display_name || user.username}”？上游 Key 不会被修改。`)) return
-  try { await api.deleteUser(user.id); toast.success('用户已删除', '上游 Key 保持不变。'); await load() }
-  catch (cause) { toast.error('删除失败', cause instanceof ApiError ? cause.message : undefined) }
+function removeUser(user: AdminUser) {
+  askConfirm({
+    title: '删除该用户',
+    description: `即将删除「${user.display_name || user.username}」（@${user.username}）的门户账号。`,
+    points: ['该用户将无法再登录门户', '上游 Key 及其额度不会被修改', '记录保留在数据库中，可由管理员恢复'],
+    confirmLabel: '删除用户',
+    tone: 'danger',
+  }, async () => {
+    try { await api.deleteUser(user.id); toast.success('用户已删除', '上游 Key 保持不变。'); await load() }
+    catch (cause) { toast.error('删除失败', cause instanceof ApiError ? cause.message : undefined) }
+  })
 }
 
-function askConfirm(options: { title: string; description: string; points?: string[]; confirmLabel: string }, action: () => Promise<void>) {
+function askConfirm(options: { title: string; description: string; points?: string[]; confirmLabel: string; tone?: 'default' | 'danger' }, action: () => Promise<void>) {
   confirmDialog.title = options.title
   confirmDialog.description = options.description
   confirmDialog.points = options.points || []
   confirmDialog.confirmLabel = options.confirmLabel
+  confirmDialog.tone = options.tone || 'default'
   confirmAction = action
   confirmDialog.open = true
 }
@@ -352,14 +361,20 @@ onBeforeUnmount(stopJobPolling)
       </template>
     </ModalDialog>
 
-    <ModalDialog :open="confirmDialog.open" :title="confirmDialog.title" :description="confirmDialog.description" @close="closeConfirm">
-      <ul v-if="confirmDialog.points.length" class="confirm-points">
-        <li v-for="point in confirmDialog.points" :key="point"><CircleAlert :size="14" /><span>{{ point }}</span></li>
-      </ul>
-      <template #footer>
-        <button class="secondary-button" type="button" @click="closeConfirm">取消</button>
-        <button class="primary-button" type="button" @click="runConfirm"><RotateCcw :size="16" />{{ confirmDialog.confirmLabel }}</button>
+    <ConfirmDialog
+      :open="confirmDialog.open"
+      :title="confirmDialog.title"
+      :description="confirmDialog.description"
+      :points="confirmDialog.points"
+      :confirm-label="confirmDialog.confirmLabel"
+      :tone="confirmDialog.tone"
+      @close="closeConfirm"
+      @confirm="runConfirm"
+    >
+      <template #confirm-icon>
+        <Trash2 v-if="confirmDialog.tone === 'danger'" :size="16" />
+        <RotateCcw v-else :size="16" />
       </template>
-    </ModalDialog>
+    </ConfirmDialog>
   </AppShell>
 </template>

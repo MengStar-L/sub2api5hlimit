@@ -222,11 +222,14 @@
   line-height: 1;
 }
 .metric-row small { font-size: 11.5px; color: var(--muted); }
+/* 说明紧跟在指标后面，用发丝竖线分隔；早先靠 margin-left:auto 推到最右，
+   宽屏下会离指标一千余像素，读起来像是与本行无关的另一块内容 */
 .metric-row .metric-note {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin-left: auto;
+  padding-left: 26px;
+  border-left: 1px solid var(--line);
   font-size: 11.5px;
   color: var(--muted);
 }

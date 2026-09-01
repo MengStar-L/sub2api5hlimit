@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Check, CircleAlert, Download, ExternalLink, LoaderCircle, RefreshCw, RotateCcw, ServerCog } from 'lucide-vue-next'
 import AppShell from '@/layouts/AppShell.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { api, ApiError } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 import { toast } from '@/state/toast'
@@ -12,6 +13,7 @@ const loading = ref(true)
 const checking = ref(false)
 const applying = ref(false)
 const reconnecting = ref(false)
+const confirmOpen = ref(false)
 let reconnectTimer: ReturnType<typeof setInterval> | undefined
 
 const operation = computed<UpdateOperation | null>(() => update.value?.operation || null)
@@ -79,10 +81,17 @@ async function check() {
   finally { checking.value = false }
 }
 
+const installable = computed(() => Boolean(update.value?.latest?.version && update.value?.compatible && update.value.updater_available))
+
+function askApply() {
+  if (!installable.value || controlsBlocked.value) return
+  confirmOpen.value = true
+}
+
 async function apply() {
   const target = update.value?.latest?.version
   if (!target || !update.value?.compatible || !update.value.updater_available) return
-  if (!window.confirm(`确认下载并安装 ${target}？服务会短暂重启；若健康检查失败会自动回滚到当前版本。`)) return
+  confirmOpen.value = false
   applying.value = true
   try {
     const result = await api.applyUpdate(target)
@@ -118,7 +127,7 @@ onBeforeUnmount(stopReconnect)
           <div class="update-compatibility"><div><span>更新方式</span><strong>{{ !update.latest ? '尚未获取' : update.latest.mode === 'manual' ? '手动升级' : '二进制更新' }}</strong></div><div><span>更新服务</span><strong>{{ update.updater_available ? '已就绪' : '不可用' }}</strong></div><div><span>最低更新器版本</span><strong class="mono">{{ update.latest?.min_updater_version || '—' }}</strong></div></div>
           <div v-if="update.status === 'check_failed'" class="notice tone-warning"><CircleAlert :size="16" /><span>无法连接 GitHub，页面正在展示最近一次成功检查结果。{{ update.last_error_code ? ` 错误：${update.last_error_code}` : '' }}</span></div>
           <div v-else-if="update.status === 'manual_required'" class="notice tone-warning"><CircleAlert :size="16" /><span>该版本涉及部署配置变更。请按 Release 或 README 的手动升级说明操作，避免半更新。</span></div>
-          <div class="update-actions"><span v-if="update.update_available && update.compatible && update.updater_available">{{ update.latest?.version }} 已准备好下载；服务将短暂离线。</span><span v-else-if="!update.update_available">没有可安装的新稳定版。</span><span v-else>自动更新当前不可用。</span><button v-if="update.update_available" class="primary-button" type="button" :disabled="!update.compatible || !update.updater_available || controlsBlocked" @click="apply"><Download :size="16" />安装 {{ update.latest?.version || '更新' }}</button></div>
+          <div class="update-actions"><span v-if="update.update_available && update.compatible && update.updater_available">{{ update.latest?.version }} 已准备好下载；服务将短暂离线。</span><span v-else-if="!update.update_available">没有可安装的新稳定版。</span><span v-else>自动更新当前不可用。</span><button v-if="update.update_available" class="primary-button" type="button" :disabled="!update.compatible || !update.updater_available || controlsBlocked" @click="askApply"><Download :size="16" />安装 {{ update.latest?.version || '更新' }}</button></div>
         </div>
       </section>
 
@@ -130,5 +139,22 @@ onBeforeUnmount(stopReconnect)
         </div>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="confirmOpen"
+      :title="`安装 ${update?.latest?.version || '更新'}`"
+      :description="`即将从 GitHub 下载并安装 ${update?.latest?.version || '最新稳定版'}，替换当前运行的 ${update?.current.version || '版本'}。`"
+      :points="[
+        '下载后校验 digest，校验不通过则不会替换程序',
+        '替换前自动备份现有程序，服务将短暂重启',
+        '重启后健康检查失败会自动回滚到当前版本',
+      ]"
+      :confirm-label="`下载并安装`"
+      :busy="applying"
+      @close="confirmOpen = false"
+      @confirm="apply"
+    >
+      <template #confirm-icon><Download :size="16" /></template>
+    </ConfirmDialog>
   </AppShell>
 </template>

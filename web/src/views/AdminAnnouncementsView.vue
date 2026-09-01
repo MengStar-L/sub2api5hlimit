@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { Megaphone, Plus, RefreshCw, Save, Trash2, Pencil, Clock3 } from 'lucide-vue-next'
 import AppShell from '@/layouts/AppShell.vue'
 import SideDrawer from '@/components/SideDrawer.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { api, ApiError } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
@@ -70,14 +71,26 @@ async function submit() {
   }
 }
 
-async function remove(item: Announcement) {
-  if (!window.confirm(`确认删除公告「${item.title}」？用户将不再看到它。`)) return
+const pending = ref<Announcement | null>(null)
+const removing = ref(false)
+
+function askRemove(item: Announcement) {
+  pending.value = item
+}
+
+async function remove() {
+  const item = pending.value
+  if (!item) return
+  removing.value = true
   try {
     await api.deleteAnnouncement(item.id)
+    pending.value = null
     toast.success('公告已删除')
     await load()
   } catch (cause) {
     toast.error('删除失败', cause instanceof ApiError ? cause.message : undefined)
+  } finally {
+    removing.value = false
   }
 }
 
@@ -112,7 +125,7 @@ onMounted(() => void load())
               <time :datetime="String(item.published_at)"><Clock3 :size="12" />{{ formatDateTime(item.published_at) }}</time>
               <div class="announce-item-actions">
                 <button class="text-button" type="button" @click="openEdit(item)"><Pencil :size="14" />编辑</button>
-                <button class="text-button danger-text" type="button" @click="remove(item)"><Trash2 :size="14" />删除</button>
+                <button class="text-button danger-text" type="button" @click="askRemove(item)"><Trash2 :size="14" />删除</button>
               </div>
             </div>
           </li>
@@ -131,5 +144,19 @@ onMounted(() => void load())
       </form>
       <template #footer><button class="secondary-button" type="button" @click="drawerOpen = false">取消</button><button class="primary-button" type="submit" form="announcement-form" :disabled="saving"><span v-if="saving" class="spinner"></span><Save v-else :size="17" />{{ mode === 'create' ? '发布' : '保存' }}</button></template>
     </SideDrawer>
+
+    <ConfirmDialog
+      :open="Boolean(pending)"
+      title="删除该公告"
+      :description="`即将删除「${pending?.title || ''}」。`"
+      :points="['用户端与侧栏列表中将不再显示这条公告', '已读取记录一并清除', '该操作无法撤销']"
+      confirm-label="删除公告"
+      tone="danger"
+      :busy="removing"
+      @close="pending = null"
+      @confirm="remove"
+    >
+      <template #confirm-icon><Trash2 :size="16" /></template>
+    </ConfirmDialog>
   </AppShell>
 </template>
