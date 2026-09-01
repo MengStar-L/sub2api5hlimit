@@ -183,7 +183,11 @@
 /* ── ≤480px ────────────────────────────────────────────────────── */
 
 @media (max-width: 480px) {
+  /* 窄屏放不下一行，眉标与说明回到标题上下方 */
   .page-heading { align-items: stretch; }
+  .page-heading > div:first-child { display: grid; gap: 5px; }
+  .page-heading p { padding-left: 0; }
+  .page-heading p::before { display: none; }
   .heading-actions { width: 100%; }
   .heading-actions .secondary-button, .heading-actions .primary-button { flex: 1; }
   .metric-row { gap: 18px 22px; }

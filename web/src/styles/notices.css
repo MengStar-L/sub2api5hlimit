@@ -271,11 +271,11 @@
   flex-wrap: wrap;
   width: 100%;
 }
-.announce-item-head h3 {
+.announce-item-head h3, .announce-main h3 {
   font-size: 14.5px;
   font-variation-settings: "opsz" 20, "SOFT" 24, "WONK" 1;
 }
-.announce-item-head time {
+.announce-item-head time, .announce-meta time {
   font-family: var(--font-mono);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -297,8 +297,39 @@
   color: var(--jade);
 }
 .announce-item-actions { display: inline-flex; align-items: center; gap: 14px; }
-.announce-list.admin li { padding-left: 14px; }
+
+/* 管理页：正文列 + 右侧元信息栏。
+   抽屉只有 460px，共用规则保持单列；这里的两列只在管理页生效。 */
+.announce-list.admin li {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  /* 共用规则的 justify-items: start 会让正文列缩到内容宽度 */
+  justify-items: stretch;
+  gap: 8px 32px;
+  padding-left: 14px;
+}
 .announce-list.admin li::before { background: var(--plum); }
+.announce-list.admin .announce-main { display: grid; gap: 7px; min-width: 0; }
+/* 正文限宽到易读的行长，不跟着页面一起拉满 */
+.announce-list.admin .announce-body { max-width: 78ch; }
+.announce-list.admin .announce-meta {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  padding-top: 1px;
+}
+.announce-list.admin .announce-meta time {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.announce-list.admin .announce-meta time svg { color: var(--faint); }
+
+/* 窄屏收回单列，元信息回到正文下方并靠左 */
+@media (max-width: 720px) {
+  .announce-list.admin li { grid-template-columns: minmax(0, 1fr); gap: 9px; }
+  .announce-list.admin .announce-meta { justify-items: start; gap: 8px; }
+}
 
 /* 自动弹窗：图标 + 正文 */
 .announce-popup {

@@ -104,14 +104,16 @@ onMounted(() => void load())
         <EmptyState v-else-if="items.length === 0" title="还没有公告" description="发布第一条公告，用户下次登录时就会看到。"><button class="secondary-button" type="button" @click="openCreate"><Plus :size="15" />发布公告</button></EmptyState>
         <TransitionGroup v-else tag="ol" name="row" class="announce-list admin">
           <li v-for="item in items" :key="item.id">
-            <div class="announce-item-head">
+            <div class="announce-main">
               <h3>{{ item.title }}</h3>
-              <time :datetime="String(item.published_at)">{{ formatDateTime(item.published_at) }}</time>
+              <p class="announce-body">{{ item.body }}</p>
             </div>
-            <p class="announce-body">{{ item.body }}</p>
-            <div class="announce-item-actions">
-              <button class="text-button" type="button" @click="openEdit(item)"><Pencil :size="14" />编辑</button>
-              <button class="text-button danger-text" type="button" @click="remove(item)"><Trash2 :size="14" />删除</button>
+            <div class="announce-meta">
+              <time :datetime="String(item.published_at)"><Clock3 :size="12" />{{ formatDateTime(item.published_at) }}</time>
+              <div class="announce-item-actions">
+                <button class="text-button" type="button" @click="openEdit(item)"><Pencil :size="14" />编辑</button>
+                <button class="text-button danger-text" type="button" @click="remove(item)"><Trash2 :size="14" />删除</button>
+              </div>
             </div>
           </li>
         </TransitionGroup>
