@@ -241,7 +241,9 @@ sudo bash ./scripts/install.sh
 
 涉及目录布局、安装脚本或 systemd unit 变化的 Release 必须把 manifest 标为 `mode=manual`。页面会提示人工下载 Release 并再次运行安装器，root updater 不会自行改写 `/etc/systemd/system`。查看 watcher、执行日志和状态文件：
 
-Release workflow 从仓库内的 `packaging/update-policy.json` 生成 manifest。该策略文件只允许 `min_updater_version` 与 `mode` 两个字段，并随代码评审；当前 `v0.2.0` 因首次引入 updater、目录和 systemd units，策略为 `manual`。发布后续纯二进制版本前，维护者才可把 `mode` 明确改为 `binary`。
+Release workflow 从仓库内的 `packaging/update-policy.json` 生成 manifest。该策略文件只允许 `min_updater_version` 与 `mode` 两个字段，并随代码评审。`v0.2.0` 与 `v0.3.0` 因首次引入 updater、目录和 systemd units 而发布为 `manual`；自 `v0.3.1` 起策略为 `binary`，纯二进制版本可由 root updater 自行安装。
+
+改动目录布局、安装脚本或 systemd unit 的版本，必须在发布前把 `mode` 改回 `manual`，发布后再视情况调整；否则 updater 只会替换二进制而不会更新 unit 文件，留下半更新状态。
 
 ```bash
 sudo systemctl status sub2api-limit-portal-update.path
