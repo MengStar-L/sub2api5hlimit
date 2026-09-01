@@ -27,13 +27,12 @@ function resetAriaLabel(value?: number | string | null) {
 <template>
   <div class="compact-quota" :class="{ issue: Boolean(issue) }">
     <template v-if="window && !issue">
-      <div class="compact-quota-head"><strong>{{ label }}</strong><span>{{ Math.round(percent) }}%</span></div>
+      <div class="compact-quota-head"><span>{{ Math.round(percent) }}%</span></div>
       <div class="compact-quota-money">{{ formatUSD(window.used_usd) }} <small>/ {{ formatUSD(window.limit_usd) }}</small></div>
       <div class="compact-quota-track" aria-hidden="true"><span :style="{ width: `${percent}%` }"></span></div>
       <time class="compact-quota-reset" :class="{ stale }" :title="formatDateTime(window.reset_at)" :tabindex="window.reset_at ? 0 : undefined" :aria-label="resetAriaLabel(window.reset_at)" :aria-describedby="window.reset_at ? resetTooltipID : undefined"><Clock3 :size="11" /><span v-if="stale">数据陈旧 · </span>{{ formatCountdown(window.reset_at, now) }}<span v-if="window.reset_at" :id="resetTooltipID" class="quota-reset-tooltip" role="tooltip">{{ formatDateTime(window.reset_at) }}</span></time>
     </template>
     <template v-else>
-      <div class="compact-quota-head"><strong>{{ label }}</strong></div>
       <span class="compact-quota-issue"><TriangleAlert :size="12" />{{ issue || '尚未启动' }}</span>
       <time v-if="window?.reset_at" class="compact-quota-reset" :title="formatDateTime(window.reset_at)" tabindex="0" :aria-label="resetAriaLabel(window.reset_at)" :aria-describedby="resetTooltipID"><Clock3 :size="11" />{{ formatCountdown(window.reset_at, now) }}<span :id="resetTooltipID" class="quota-reset-tooltip" role="tooltip">{{ formatDateTime(window.reset_at) }}</span></time>
     </template>

@@ -5,8 +5,8 @@ defineProps<{ title: string; description: string }>()
 
 <template>
   <div class="empty-state">
-    <span class="empty-icon"><Inbox :size="23" /></span>
-    <strong>{{ title }}</strong>
+    <span class="empty-icon"><Inbox :size="18" /></span>
+    <h3>{{ title }}</h3>
     <p>{{ description }}</p>
     <slot />
   </div>

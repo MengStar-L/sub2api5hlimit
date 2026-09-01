@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { KeyRound, Save, ShieldCheck, UserRound } from 'lucide-vue-next'
+import { Save, ShieldCheck, UserRound } from 'lucide-vue-next'
 import AppShell from '@/layouts/AppShell.vue'
 import { api, ApiError } from '@/lib/api'
 import { toast } from '@/state/toast'
@@ -32,21 +32,23 @@ async function submit() {
 
 <template>
   <AppShell>
-    <header class="page-heading compact"><div><span class="eyebrow"><ShieldCheck :size="14" /> 账户安全</span><h1>个人设置</h1><p>管理你的登录密码和账户信息。</p></div></header>
+    <header class="page-heading compact"><div><span class="eyebrow"><ShieldCheck :size="13" /> 账户安全</span><h1>个人设置</h1><p>管理你的登录密码和账户信息。</p></div></header>
     <div class="profile-layout">
-      <section class="section-block profile-summary">
+      <section class="profile-summary">
         <span class="large-avatar">{{ (sessionStore.user.value?.display_name || sessionStore.user.value?.username || 'U').slice(0, 1).toUpperCase() }}</span>
         <div><h2>{{ sessionStore.user.value?.display_name || sessionStore.user.value?.username }}</h2><p class="mono">@{{ sessionStore.user.value?.username }}</p></div>
-        <span class="role-badge"><UserRound :size="14" />{{ sessionStore.isAdmin.value ? '管理员' : '普通用户' }}</span>
+        <span class="role-badge"><UserRound :size="13" />{{ sessionStore.isAdmin.value ? '管理员' : '普通用户' }}</span>
       </section>
-      <section class="section-block password-section">
-        <div class="section-heading"><div><span class="section-icon amber"><KeyRound :size="19" /></span><div><h2>修改密码</h2><p>更新后会撤销其他设备上的会话</p></div></div></div>
-        <form class="password-form" @submit.prevent="submit">
-          <div v-if="error" class="form-alert" role="alert">{{ error }}</div>
-          <label class="field full"><span>当前密码</span><input v-model="currentPassword" type="password" autocomplete="current-password" required /></label>
-          <div class="form-grid"><label class="field"><span>新密码</span><input v-model="newPassword" type="password" autocomplete="new-password" required placeholder="至少 12 位" /></label><label class="field"><span>确认新密码</span><input v-model="confirmPassword" type="password" autocomplete="new-password" required /></label></div>
-          <button class="primary-button" type="submit" :disabled="loading"><span v-if="loading" class="spinner"></span><Save v-else :size="17" />{{ loading ? '正在保存' : '保存新密码' }}</button>
-        </form>
+      <section class="panel accent-amber">
+        <div class="panel-head"><div><h2>修改密码</h2><p>更新后会撤销其他设备上的会话</p></div></div>
+        <div class="panel-body">
+          <form class="password-form" @submit.prevent="submit">
+            <div v-if="error" class="form-alert" role="alert">{{ error }}</div>
+            <label class="field full"><span>当前密码</span><input v-model="currentPassword" type="password" autocomplete="current-password" required /></label>
+            <div class="form-grid"><label class="field"><span>新密码</span><input v-model="newPassword" type="password" autocomplete="new-password" required placeholder="至少 12 位" /></label><label class="field"><span>确认新密码</span><input v-model="confirmPassword" type="password" autocomplete="new-password" required /></label></div>
+            <button class="primary-button" type="submit" :disabled="loading"><span v-if="loading" class="spinner"></span><Save v-else :size="16" />{{ loading ? '正在保存' : '保存新密码' }}</button>
+          </form>
+        </div>
       </section>
     </div>
   </AppShell>

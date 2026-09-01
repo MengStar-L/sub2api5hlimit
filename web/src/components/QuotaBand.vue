@@ -9,7 +9,8 @@ const props = withDefaults(defineProps<{
   kind: 'key' | 'pool'
   window?: KeyWindowView | PoolWindowView | null
   accent?: 'cobalt' | 'mint' | 'violet' | 'amber'
-}>(), { accent: 'cobalt' })
+  dense?: boolean
+}>(), { accent: 'cobalt', dense: false })
 
 const isKey = computed(() => props.kind === 'key')
 const supported = computed(() => isKey.value || Boolean((props.window as PoolWindowView | undefined)?.supported))
@@ -42,19 +43,19 @@ const ringOffset = computed(() => 138.23 * (1 - Math.min(100, animated.value) / 
 </script>
 
 <template>
-  <article class="quota-band" :class="[`accent-${accent}`, { unsupported: !supported }]">
+  <article class="quota-band" :class="[`accent-${accent}`, { unsupported: !supported, dense }]">
     <div class="quota-ring" :aria-label="`${label} 已使用 ${Math.round(animated)}%`">
       <svg viewBox="0 0 52 52" aria-hidden="true">
         <circle class="ring-track" cx="26" cy="26" r="22" />
         <circle v-if="supported" class="ring-value" cx="26" cy="26" r="22" :style="{ strokeDashoffset: ringOffset }" />
       </svg>
       <div v-if="supported" class="ring-number"><strong>{{ Math.round(animated) }}</strong><span>%</span></div>
-      <CircleSlash2 v-else :size="22" />
+      <CircleSlash2 v-else :size="18" />
     </div>
 
     <div class="quota-copy">
       <div class="quota-heading">
-        <span class="quota-label"><Gauge :size="15" />{{ label }}</span>
+        <span class="quota-label"><Gauge :size="14" />{{ label }}</span>
         <strong v-if="isKey && window">{{ formatUSD((window as KeyWindowView).remaining_usd) }} 可用</strong>
         <strong v-else-if="supported">{{ Math.round(animated) }}% 已用</strong>
         <strong v-else>未提供</strong>
@@ -66,7 +67,7 @@ const ringOffset = computed(() => 138.23 * (1 - Math.min(100, animated.value) / 
         <span v-if="isKey && window">已用 {{ formatUSD((window as KeyWindowView).used_usd) }} / {{ formatUSD((window as KeyWindowView).limit_usd) }}</span>
         <span v-else-if="supported">Provider 用量窗口</span>
         <span v-else>当前账号未返回此窗口</span>
-        <span><Clock3 :size="13" />{{ supported ? formatCountdown(resetAt) : '—' }}</span>
+        <span><Clock3 :size="12" />{{ supported ? formatCountdown(resetAt) : '—' }}</span>
       </div>
     </div>
   </article>

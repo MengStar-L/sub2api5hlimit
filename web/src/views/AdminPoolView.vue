@@ -54,30 +54,30 @@ onMounted(() => void load())
 
 <template>
   <AppShell>
-    <header class="page-heading"><div><span class="eyebrow"><ServerCog :size="14" /> 公开账号池</span><h1>账号发布</h1><p>选择普通用户可见的账号状态；邮箱将在用户端脱敏。</p></div><button class="secondary-button" type="button" @click="load(true)"><RefreshCw :size="16" :class="{ spinning: refreshing }" />同步清单</button></header>
+    <header class="page-heading"><div><span class="eyebrow"><ServerCog :size="13" /> 公开账号池</span><h1>账号发布</h1><p>选择普通用户可见的账号状态；邮箱将在用户端脱敏。</p></div><button class="secondary-button" type="button" @click="load(true)"><RefreshCw :size="15" :class="{ spinning: refreshing }" />同步清单</button></header>
 
-    <div class="stats-strip pool-stats"><div><span class="metric-dot mint"></span><small>账号总数</small><strong>{{ accounts.length }}</strong></div><div><span class="metric-dot cobalt"></span><small>已公开</small><strong>{{ publishedCount }}</strong></div><div><span class="metric-dot amber"></span><small>当前选择</small><strong>{{ selected.size }}</strong></div><div class="stats-note"><Eye :size="17" /><span>用户只看到脱敏账号和用量窗口</span></div></div>
+    <div class="metric-row stagger"><div><span class="metric-dot mint"></span><strong class="numeral">{{ accounts.length }}</strong><small>账号总数</small></div><div><span class="metric-dot cobalt"></span><strong class="numeral">{{ publishedCount }}</strong><small>已公开</small></div><div><span class="metric-dot amber"></span><strong class="numeral">{{ selected.size }}</strong><small>当前选择</small></div><div class="metric-note"><Eye :size="15" /><span>用户只看到脱敏账号和用量窗口</span></div></div>
 
-    <section class="section-block admin-table-section pool-admin">
-      <div class="table-tools pool-toolbar">
-        <label class="search-field"><Search :size="16" /><input v-model="query" type="search" placeholder="搜索账号或 Provider" /></label>
-        <select v-model="visibility" class="select-control"><option value="all">全部账号</option><option value="published">已公开</option><option value="private">未公开</option></select>
-        <Transition name="selection"><div v-if="selected.size" class="batch-actions"><span>已选 {{ selected.size }} 项</span><button class="small-button" type="button" :disabled="saving" @click="publish(true)"><Eye :size="14" />公开</button><button class="small-button neutral" type="button" :disabled="saving" @click="publish(false)"><EyeOff :size="14" />取消公开</button></div></Transition>
+    <section class="panel accent-mint">
+      <div class="table-tools">
+        <label class="search-field"><Search :size="15" /><input v-model="query" type="search" placeholder="搜索账号或 Provider" aria-label="搜索账号" /></label>
+        <select v-model="visibility" class="select-control" aria-label="可见性筛选"><option value="all">全部账号</option><option value="published">已公开</option><option value="private">未公开</option></select>
+        <Transition name="selection"><div v-if="selected.size" class="batch-actions"><span>已选 {{ selected.size }} 项</span><button class="small-button" type="button" :disabled="saving" @click="publish(true)"><Eye :size="13" />公开</button><button class="small-button neutral" type="button" :disabled="saving" @click="publish(false)"><EyeOff :size="13" />取消公开</button></div></Transition>
       </div>
       <div v-if="loading" class="pool-loading"><span v-for="n in 5" :key="n" class="skeleton skeleton-row"></span></div>
       <EmptyState v-else-if="filtered.length === 0" title="没有匹配的账号" description="等待上游账号同步，或调整当前筛选。" />
       <div v-else class="responsive-table">
-        <table class="admin-table account-admin-table">
-          <thead><tr><th><button class="checkbox-button" type="button" :aria-label="allSelected ? '取消全选' : '全选'" @click="toggleAll"><CheckSquare :size="17" :class="{ checked: allSelected }" /></button></th><th>账号</th><th>状态</th><th>5h</th><th>7d</th><th>数据时间</th><th>用户可见</th></tr></thead>
+        <table class="data-table">
+          <thead><tr><th><button class="checkbox-button" type="button" :aria-label="allSelected ? '取消全选' : '全选'" @click="toggleAll"><CheckSquare :size="16" :class="{ checked: allSelected }" /></button></th><th>账号</th><th>状态</th><th>5h</th><th>7d</th><th>数据时间</th><th>用户可见</th></tr></thead>
           <TransitionGroup tag="tbody" name="row">
             <tr v-for="account in filtered" :key="account.id" :class="{ selected: selected.has(String(account.id)) }">
-              <td data-label="选择"><button class="checkbox-button" type="button" :aria-label="`选择 ${name(account)}`" @click="toggle(account.id)"><CheckSquare :size="17" :class="{ checked: selected.has(String(account.id)) }" /></button></td>
-              <td data-label="账号"><div class="account-identity"><span class="provider-dot"></span><div><strong class="mono">{{ name(account) }}</strong><small>{{ account.provider || '未知 Provider' }}</small></div></div></td>
+              <td data-label="选择"><button class="checkbox-button" type="button" :aria-label="`选择 ${name(account)}`" @click="toggle(account.id)"><CheckSquare :size="16" :class="{ checked: selected.has(String(account.id)) }" /></button></td>
+              <td data-label="账号"><div class="identity"><span class="provider-dot" :class="`provider-${(account.provider || 'generic').toLowerCase()}`"></span><div><strong class="mono">{{ name(account) }}</strong><small>{{ account.provider || '未知 Provider' }}</small></div></div></td>
               <td data-label="状态"><StatusPill :status="account.status || 'active'" :stale="account.snapshot?.stale" /></td>
-              <td data-label="5h"><QuotaBand label="5h" kind="pool" accent="mint" :window="account.window_5h || account.usage_5h" /></td>
-              <td data-label="7d"><QuotaBand label="7d" kind="pool" accent="violet" :window="account.window_7d || account.usage_7d" /></td>
-              <td data-label="数据时间"><span class="timestamp"><Clock3 :size="13" />{{ formatDateTime(account.snapshot?.source_updated_at || account.snapshot?.as_of) }}</span></td>
-              <td data-label="用户可见"><button class="publish-toggle" type="button" :aria-pressed="account.published" :title="account.published ? '取消公开' : '公开账号'" @click="publish(!account.published, [String(account.id)])"><span></span><Eye v-if="account.published" :size="14" /><EyeOff v-else :size="14" /></button></td>
+              <td data-label="5h"><QuotaBand label="5h" kind="pool" accent="mint" dense :window="account.window_5h || account.usage_5h" /></td>
+              <td data-label="7d"><QuotaBand label="7d" kind="pool" accent="violet" dense :window="account.window_7d || account.usage_7d" /></td>
+              <td data-label="数据时间"><span class="timestamp"><Clock3 :size="12" />{{ formatDateTime(account.snapshot?.source_updated_at || account.snapshot?.as_of) }}</span></td>
+              <td data-label="用户可见"><button class="publish-toggle" type="button" :aria-pressed="account.published" :title="account.published ? '取消公开' : '公开账号'" @click="publish(!account.published, [String(account.id)])"><span></span><Eye v-if="account.published" :size="13" /><EyeOff v-else :size="13" /></button></td>
             </tr>
           </TransitionGroup>
         </table>

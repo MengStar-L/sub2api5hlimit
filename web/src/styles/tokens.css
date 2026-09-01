@@ -1,0 +1,97 @@
+/* ── Design tokens ────────────────────────────────────────────────
+   浅色「柔和杂志感」体系：暖纸底 + 发丝线分区 + 彩色点缀。
+   装饰字体 Fraunces 只承担拉丁字形（数字、$、版本号、品牌字），
+   中文自动回退到 Noto Sans SC，因此不额外加载中文衬线。 */
+
+:root {
+  /* 纸面与墨色 */
+  --paper: #fffdfa;
+  --paper-raised: #ffffff;
+  --canvas: #f8f5ef;
+  --canvas-deep: #f1ece3;
+  --ink: #241f1b;
+  --ink-soft: #5b534b;
+  --muted: #8a8177;
+  --faint: #a9a096;
+
+  /* 发丝线 */
+  --line: #e8e1d6;
+  --line-strong: #d8cfc0;
+  --line-ink: rgba(36, 31, 27, .1);
+
+  /* 彩色点缀（暖调） */
+  --plum: #7b4bc4;
+  --plum-soft: #f2ebfd;
+  --jade: #10876a;
+  --jade-soft: #e2f4ee;
+  --indigo: #3f5bd4;
+  --indigo-soft: #eaeeff;
+  --saffron: #b5760a;
+  --saffron-soft: #fdf0d8;
+  --terracotta: #c9503c;
+  --terracotta-soft: #fdeae6;
+
+  /* 语义别名：模板沿用旧 accent 名，这里统一改成暖色 */
+  --cobalt: var(--indigo);
+  --cobalt-soft: var(--indigo-soft);
+  --mint: var(--jade);
+  --mint-soft: var(--jade-soft);
+  --violet: var(--plum);
+  --violet-soft: var(--plum-soft);
+  --amber: var(--saffron);
+  --amber-soft: var(--saffron-soft);
+  --coral: var(--terracotta);
+  --coral-soft: var(--terracotta-soft);
+
+  /* 阴影：极轻，靠发丝线而不是投影分层 */
+  --shadow-sm: 0 1px 2px rgba(60, 48, 34, .04);
+  --shadow: 0 6px 20px -8px rgba(60, 48, 34, .14);
+  --shadow-lg: 0 24px 60px -20px rgba(60, 48, 34, .22);
+
+  /* 字体 */
+  --font-sans: "Inter Variable", "Noto Sans SC", system-ui, sans-serif;
+  --font-display: "Fraunces Variable", "Noto Sans SC", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* 动画 */
+  --dur-1: 130ms;
+  --dur-2: 220ms;
+  --dur-3: 380ms;
+  --dur-4: 620ms;
+  --ease: cubic-bezier(.32, .72, 0, 1);
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
+
+  /* 尺度 */
+  --rail: 236px;
+  --page-max: 1180px;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --radius-lg: 16px;
+
+  font-family: var(--font-sans);
+  font-feature-settings: "cv05" 1, "ss03" 1;
+  color: var(--ink);
+  background: var(--canvas);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 装饰字体工具类：opsz 随字号变化，SOFT 让终端更圆润，WONK 保留一点俏皮 */
+.numeral {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 22, "SOFT" 18, "WONK" 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: .94em;
+  letter-spacing: -.01em;
+}
+
+.muted { color: var(--muted); }

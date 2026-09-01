@@ -1,0 +1,245 @@
+/* ── QuotaBand：环形进度 + 数字 + 细进度条 ────────────────────── */
+
+.quota-band {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  --accent: var(--indigo);
+}
+.quota-band.accent-cobalt { --accent: var(--indigo); }
+.quota-band.accent-mint { --accent: var(--jade); }
+.quota-band.accent-violet { --accent: var(--plum); }
+.quota-band.accent-amber { --accent: var(--saffron); }
+.quota-band.unsupported { --accent: var(--faint); }
+
+/* 环 */
+.quota-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 auto;
+  color: var(--faint);
+}
+.quota-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.quota-ring .ring-track { fill: none; stroke: var(--canvas-deep); stroke-width: 4; }
+.quota-ring .ring-value {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 138.23;
+  transition: stroke-dashoffset var(--dur-4) var(--ease-out), stroke var(--dur-3) ease;
+}
+.quota-ring .ring-number {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 20, "SOFT" 16, "WONK" 0;
+  font-variant-numeric: tabular-nums;
+}
+.quota-ring .ring-number strong { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+.quota-ring .ring-number span { font-size: 9.5px; color: var(--muted); font-weight: 550; }
+
+/* 文案区 */
+.quota-copy { display: grid; gap: 7px; min-width: 0; flex: 1; }
+.quota-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.quota-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--ink-soft);
+}
+.quota-label svg { width: 13px; height: 13px; color: var(--accent); }
+.quota-heading > strong {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 18, "SOFT" 16, "WONK" 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 细进度条：填充带微光扫过 */
+.quota-track {
+  position: relative;
+  height: 5px;
+  background: var(--canvas-deep);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.quota-track > span {
+  position: relative;
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 62%, white), var(--accent));
+  transition: width var(--dur-4) var(--ease-out);
+}
+.quota-track > span::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .5), transparent);
+  animation: sheen 2.6s var(--ease-out) infinite;
+  animation-delay: .6s;
+}
+
+.quota-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.quota-meta > span { display: inline-flex; align-items: center; gap: 5px; }
+
+/* 紧凑变体：表格行内用，环缩小、说明行只留倒计时 */
+.quota-band.dense { gap: 10px; min-width: 132px; }
+.quota-band.dense .quota-ring { width: 36px; height: 36px; }
+.quota-band.dense .quota-ring .ring-track,
+.quota-band.dense .quota-ring .ring-value { stroke-width: 5; }
+.quota-band.dense .quota-ring .ring-number strong { font-size: 11.5px; }
+.quota-band.dense .quota-ring .ring-number span { display: none; }
+.quota-band.dense .quota-copy { gap: 5px; }
+.quota-band.dense .quota-label { display: none; }
+.quota-band.dense .quota-heading { justify-content: flex-start; }
+.quota-band.dense .quota-heading > strong { font-size: 12.5px; }
+.quota-band.dense .quota-track { height: 4px; }
+.quota-band.dense .quota-meta > span:first-child { display: none; }
+.quota-band.dense .quota-meta { font-size: 10.5px; }
+
+/* ── CompactQuotaCell：表格里的紧凑版 ─────────────────────────── */
+
+.compact-quota { display: grid; gap: 4px; min-width: 96px; }
+/* 列头已经写了 5h / 7d，格内不再重复，只留百分比 */
+.compact-quota-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+}
+.compact-quota-head span {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 18, "SOFT" 16, "WONK" 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.compact-quota-money {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.compact-quota-money small { color: var(--faint); }
+.compact-quota-track {
+  height: 3px;
+  background: var(--canvas-deep);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.compact-quota-track > span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--indigo);
+  transform-origin: left;
+  animation: draw-bar var(--dur-4) var(--ease-out) both;
+  transition: width var(--dur-3) var(--ease-out);
+}
+.compact-quota.issue .compact-quota-track > span { background: var(--terracotta); }
+
+.compact-quota-reset {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  font-size: 10.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+.compact-quota-reset.stale { color: var(--saffron); }
+.compact-quota-issue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--terracotta);
+}
+
+/* 精确重置时间浮层 */
+.quota-reset-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  padding: 4px 8px;
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 5px;
+  font-size: 10.5px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(3px);
+  pointer-events: none;
+  transition: opacity var(--dur-2) ease, transform var(--dur-2) var(--ease-out);
+}
+.compact-quota-reset:hover .quota-reset-tooltip,
+.compact-quota-reset:focus-visible .quota-reset-tooltip { opacity: 1; transform: none; }
+
+/* ── 数字指标行：替代大方块 stats 卡 ─────────────────────────── */
+
+.metric-row {
+  display: flex;
+  align-items: baseline;
+  gap: 26px;
+  flex-wrap: wrap;
+  padding: 14px 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.metric-row > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.metric-row strong {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 30, "SOFT" 22, "WONK" 1;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.metric-row small { font-size: 11.5px; color: var(--muted); }
+.metric-row .metric-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.metric-row .metric-note svg { color: var(--jade); }
+
+.metric-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  align-self: center;
+}
+.metric-dot.cobalt { background: var(--indigo); }
+.metric-dot.mint { background: var(--jade); }
+.metric-dot.violet { background: var(--plum); }
+.metric-dot.amber { background: var(--saffron); }

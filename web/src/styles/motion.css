@@ -1,0 +1,135 @@
+/* ── Motion ───────────────────────────────────────────────────────
+   动画集中在这里：页面转场、行入场、指示器滑动、脉冲、微光。
+   所有关键帧在 prefers-reduced-motion 下统一降级（见文件末尾）。 */
+
+@keyframes rise {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes rise-sm {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translate3d(-10px, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: .55; }
+  70% { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes sheen {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(320%); }
+}
+
+@keyframes shimmer {
+  from { background-position: -160% 0; }
+  to { background-position: 260% 0; }
+}
+
+@keyframes draw-bar {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes ink-underline {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* 图标旋转 */
+.spinning { animation: spin 1s linear infinite; }
+
+/* 按钮内联加载圈 */
+.spinner {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: .85;
+  animation: spin .68s linear infinite;
+}
+.spinner.dark { border-color: var(--ink); border-top-color: transparent; }
+
+/* 骨架屏：暖色微光扫过 */
+.skeleton {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--canvas-deep) 22%, #fbf8f2 48%, var(--canvas-deep) 74%);
+  background-size: 220% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+.skeleton-row { height: 46px; }
+
+/* ── 路由转场 ── */
+.page-enter-active { animation: rise var(--dur-3) var(--ease-out) both; }
+.page-leave-active { animation: fade var(--dur-1) ease-in reverse both; }
+
+/* ── 表格行 / 列表项入场（TransitionGroup） ── */
+.row-enter-active { transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-out); }
+.row-leave-active { transition: opacity var(--dur-1) ease-in, transform var(--dur-1) ease-in; position: relative; }
+.row-enter-from { opacity: 0; transform: translateY(8px); }
+.row-leave-to { opacity: 0; transform: translateX(-14px); }
+.row-move { transition: transform var(--dur-3) var(--ease); }
+
+/* ── 批量操作条 ── */
+.selection-enter-active { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--spring); }
+.selection-leave-active { transition: opacity var(--dur-1) ease-in, transform var(--dur-1) ease-in; }
+.selection-enter-from, .selection-leave-to { opacity: 0; transform: translateY(-6px) scale(.96); }
+
+/* ── 抽屉 ── */
+.drawer-enter-active, .drawer-leave-active { transition: opacity var(--dur-2) ease; }
+.drawer-enter-active .drawer-panel { transition: transform var(--dur-3) var(--ease); }
+.drawer-leave-active .drawer-panel { transition: transform var(--dur-2) var(--ease); }
+.drawer-enter-from, .drawer-leave-to { opacity: 0; }
+.drawer-enter-from .drawer-panel, .drawer-leave-to .drawer-panel { transform: translateX(101%); }
+
+/* ── Toast ── */
+.toast-enter-active { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-3) var(--spring); }
+.toast-leave-active { transition: opacity var(--dur-1) ease-in, transform var(--dur-2) var(--ease); position: absolute; right: 0; }
+.toast-enter-from { opacity: 0; transform: translateX(26px) scale(.95); }
+.toast-leave-to { opacity: 0; transform: translateX(26px) scale(.97); }
+.toast-move { transition: transform var(--dur-2) var(--ease); }
+
+/* ── 初始化分步 ── */
+.step-enter-active { animation: rise var(--dur-3) var(--ease-out) both; }
+.step-leave-active { animation: fade var(--dur-1) ease-in reverse both; }
+
+/* ── 折叠展开 ── */
+.reveal-enter-active { animation: rise-sm var(--dur-3) var(--ease-out) both; }
+.reveal-leave-active { animation: rise-sm var(--dur-1) ease-in reverse both; }
+
+/* ── 入场编排：给容器加 .stagger，子元素依次浮现 ── */
+.stagger > * { animation: rise-sm var(--dur-3) var(--ease-out) both; }
+.stagger > :nth-child(1) { animation-delay: 20ms; }
+.stagger > :nth-child(2) { animation-delay: 70ms; }
+.stagger > :nth-child(3) { animation-delay: 120ms; }
+.stagger > :nth-child(4) { animation-delay: 170ms; }
+.stagger > :nth-child(5) { animation-delay: 220ms; }
+.stagger > :nth-child(6) { animation-delay: 270ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

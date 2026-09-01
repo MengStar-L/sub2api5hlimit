@@ -1,0 +1,91 @@
+/* ── Base ─────────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+
+html {
+  min-width: 320px;
+  background: var(--canvas);
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--canvas);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* 纸面纹理：极淡的暖色渐层，替代纯平背景，但不占布局空间 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(58rem 32rem at 8% -8%, rgba(123, 75, 196, .05), transparent 62%),
+    radial-gradient(46rem 28rem at 102% 4%, rgba(16, 135, 106, .05), transparent 58%),
+    radial-gradient(40rem 26rem at 46% 108%, rgba(181, 118, 10, .04), transparent 60%);
+}
+
+h1, h2, h3, h4, p, dl, dd, figure { margin: 0; }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 36, "SOFT" 26, "WONK" 1;
+  font-weight: 600;
+  letter-spacing: -.015em;
+  line-height: 1.2;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+a { color: inherit; text-decoration: none; }
+svg { flex: 0 0 auto; }
+table { border-collapse: collapse; }
+
+::selection { color: var(--paper); background: var(--plum); }
+
+:focus-visible {
+  outline: 2px solid var(--plum);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* 滚动条：细，暖调 */
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 3px solid transparent;
+  border-radius: 99px;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--faint); background-clip: content-box; }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── 眉标：小号字距放大的标签，用彩色圆点起头 ── */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eyebrow svg { color: var(--plum); }

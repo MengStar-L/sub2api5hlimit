@@ -211,38 +211,40 @@ onBeforeUnmount(stopJobPolling)
 <template>
   <AppShell>
     <header class="page-heading">
-      <div><span class="eyebrow"><Users :size="14" /> 平台权限</span><h1>用户管理</h1><p>创建门户用户，并为每位用户绑定一个合规 Key。</p></div>
-      <div class="heading-actions"><button class="icon-button" type="button" title="刷新" @click="load(true)"><RefreshCw :size="17" :class="{ spinning: refreshing }" /></button><button class="secondary-button quota-reset-all" type="button" :disabled="batchActive || Boolean(resettingUserID)" @click="resetAllQuota"><RotateCcw :size="16" />重置全部额度</button><button class="primary-button" type="button" @click="openCreate"><UserPlus :size="17" />添加用户</button></div>
+      <div><span class="eyebrow"><Users :size="13" /> 平台权限</span><h1>用户管理</h1><p>创建门户用户，并为每位用户绑定一个合规 Key。</p></div>
+      <div class="heading-actions"><button class="icon-button" type="button" title="刷新" @click="load(true)"><RefreshCw :size="16" :class="{ spinning: refreshing }" /></button><button class="secondary-button quota-reset-all" type="button" :disabled="batchActive || Boolean(resettingUserID)" @click="resetAllQuota"><RotateCcw :size="15" />重置全部额度</button><button class="primary-button" type="button" @click="openCreate"><UserPlus :size="16" />添加用户</button></div>
     </header>
 
-    <div class="stats-strip">
-      <div><span class="metric-dot cobalt"></span><small>普通用户</small><strong>{{ stats.total }}</strong></div>
-      <div><span class="metric-dot mint"></span><small>当前启用</small><strong>{{ stats.active }}</strong></div>
-      <div><span class="metric-dot violet"></span><small>已绑定 Key</small><strong>{{ stats.bound }}</strong></div>
-      <div class="stats-note"><ShieldCheck :size="17" /><span>每个 Key 仅能绑定一位用户</span></div>
+    <div class="metric-row stagger">
+      <div><span class="metric-dot cobalt"></span><strong class="numeral">{{ stats.total }}</strong><small>普通用户</small></div>
+      <div><span class="metric-dot mint"></span><strong class="numeral">{{ stats.active }}</strong><small>当前启用</small></div>
+      <div><span class="metric-dot violet"></span><strong class="numeral">{{ stats.bound }}</strong><small>已绑定 Key</small></div>
+      <div class="metric-note"><ShieldCheck :size="15" /><span>每个 Key 仅能绑定一位用户</span></div>
     </div>
 
-    <section class="section-block admin-table-section">
+    <section class="panel accent-violet">
       <div v-if="batchJob" class="quota-job" :class="{ active: batchActive }">
         <div><span class="job-icon" :class="batchActive ? 'cobalt' : failedItems.length ? 'amber' : 'mint'"><RotateCcw :size="17" :class="{ spinning: batchActive }" /></span><span><strong>{{ batchActive ? '正在批量重置额度' : '最近一次批量重置' }}</strong><small>已完成 {{ batchCompleted }} / {{ batchJob.total_count }} · 成功 {{ batchJob.succeeded_count }} · 跳过 {{ batchJob.skipped_count }}<template v-if="batchJob.failed_count || batchJob.unknown_count"> · 异常 {{ batchJob.failed_count + batchJob.unknown_count }}</template></small></span></div>
         <button v-if="detailItems.length" class="text-button" type="button" :aria-expanded="jobDetailsOpen" @click="jobDetailsOpen = !jobDetailsOpen">{{ jobDetailsOpen ? '收起明细' : '展开明细' }}<ChevronDown :size="15" :class="{ rotated: jobDetailsOpen }" /></button>
       </div>
-      <div v-if="jobDetailsOpen && detailItems.length" class="quota-job-failures">
-        <div v-for="item in detailItems" :key="item.id"><CircleAlert :size="14" /><span><strong>{{ item.display_name || item.username }}</strong><small>@{{ item.username }} · {{ quotaResetItemMessage(item) }}{{ item.error_code ? `（${item.error_code}）` : '' }}</small></span></div>
-      </div>
+      <Transition name="reveal">
+        <div v-if="jobDetailsOpen && detailItems.length" class="quota-job-failures">
+          <div v-for="item in detailItems" :key="item.id"><CircleAlert :size="13" /><span><strong>{{ item.display_name || item.username }}</strong><small>@{{ item.username }} · {{ quotaResetItemMessage(item) }}{{ item.error_code ? `（${item.error_code}）` : '' }}</small></span></div>
+        </div>
+      </Transition>
       <div class="table-tools">
         <label class="search-field"><Search :size="16" /><input v-model="query" type="search" placeholder="搜索用户或 Key" aria-label="搜索用户" /></label>
 		<select v-model="statusFilter" class="select-control" aria-label="状态筛选"><option value="all">全部状态</option><option value="active">正常</option><option value="disabled">已停用</option></select>
       </div>
       <div v-if="loading" class="pool-loading"><span v-for="n in 5" :key="n" class="skeleton skeleton-row"></span></div>
-      <EmptyState v-else-if="filtered.length === 0" title="没有匹配的用户" description="调整搜索条件，或创建首位普通用户。"><button class="secondary-button" type="button" @click="openCreate"><UserPlus :size="16" />添加用户</button></EmptyState>
+      <EmptyState v-else-if="filtered.length === 0" title="没有匹配的用户" description="调整搜索条件，或创建首位普通用户。"><button class="secondary-button" type="button" @click="openCreate"><UserPlus :size="15" />添加用户</button></EmptyState>
       <div v-else class="responsive-table">
-        <table class="admin-table">
+        <table class="data-table">
           <thead><tr><th>用户</th><th>Key</th><th>5h</th><th>7d</th><th>状态</th><th><span class="sr-only">操作</span></th></tr></thead>
           <TransitionGroup tag="tbody" name="row">
             <tr v-for="user in filtered" :key="user.id">
-              <td data-label="用户"><div class="user-cell"><span class="mini-avatar">{{ (user.display_name || user.username).slice(0, 1).toUpperCase() }}</span><div><strong>{{ user.display_name || user.username }}</strong><small class="mono">@{{ user.username }} · {{ formatDateTime(user.created_at) }}</small></div></div></td>
-              <td data-label="Key 绑定"><div v-if="user.binding" class="binding-cell"><KeyRound :size="15" /><span><strong>{{ user.binding.key_name || '已绑定 Key' }}</strong><small class="mono">{{ user.binding.masked_key || 'sk-…••••' }}</small></span></div><span v-else class="muted">未绑定</span></td>
+              <td data-label="用户"><div class="identity"><span class="avatar-chip">{{ (user.display_name || user.username).slice(0, 1).toUpperCase() }}</span><div><strong>{{ user.display_name || user.username }}</strong><small class="mono">@{{ user.username }} · {{ formatDateTime(user.created_at) }}</small></div></div></td>
+              <td data-label="Key 绑定"><div v-if="user.binding" class="binding-cell"><KeyRound :size="14" /><span><strong>{{ user.binding.key_name || '已绑定 Key' }}</strong><small class="mono">{{ user.binding.masked_key || 'sk-…••••' }}</small></span></div><span v-else class="muted">未绑定</span></td>
               <td data-label="5h"><CompactQuotaCell label="5h" :window="user.window_5h" :stale="user.snapshot?.stale" :binding-status="user.binding?.binding_state || user.binding?.status" /></td>
               <td data-label="7d"><CompactQuotaCell label="7d" :window="user.window_7d" :stale="user.snapshot?.stale" :binding-status="user.binding?.binding_state || user.binding?.status" /></td>
               <td data-label="状态"><div class="user-status"><StatusPill :status="userDisplayStatus(user)" :stale="user.status === 'active' && user.snapshot?.stale" /><small v-if="user.binding?.binding_state && user.binding.binding_state !== 'healthy'">{{ user.binding.binding_state === 'missing' ? '上游 Key 不存在' : user.binding.binding_state === 'invalid_limits' ? 'Key 限额异常' : '' }}</small></div></td>

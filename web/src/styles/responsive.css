@@ -1,0 +1,185 @@
+/* ── ≤1080px：设置/资料页收成单列 ──────────────────────────────── */
+
+@media (max-width: 1080px) {
+  :root { --rail: 208px; }
+  .settings-layout, .profile-layout { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+}
+
+/* ── ≤900px：侧栏转抽屉，底部出现移动导航 ─────────────────────── */
+
+@media (max-width: 900px) {
+  .app-shell { grid-template-columns: minmax(0, 1fr); }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 40;
+    width: 262px;
+    transform: translateX(-101%);
+    transition: transform var(--dur-3) var(--ease);
+    background: var(--paper);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: none;
+  }
+  .sidebar.open { transform: none; }
+  .sidebar-close { display: inline-flex; }
+  .sidebar nav a.router-link-active::before { left: -16px; }
+
+  .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(36, 31, 27, .32);
+    backdrop-filter: blur(2px);
+    animation: fade var(--dur-2) ease both;
+  }
+
+  /* 抽屉入口：浮在内容左上角，不再占一整条 */
+  .menu-button {
+    display: inline-flex;
+    position: sticky;
+    top: 10px;
+    z-index: 12;
+    margin: 10px 0 -34px 10px;
+    color: var(--ink-soft);
+    background: rgba(255, 253, 250, .92);
+    border-color: var(--line);
+    backdrop-filter: blur(10px);
+  }
+  .page-main { padding: 20px 16px 96px; }
+
+  /* 底部导航：等分，激活项顶部一条彩线 */
+  .mobile-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 25;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--line);
+    background: rgba(255, 253, 250, .92);
+    backdrop-filter: blur(12px);
+  }
+  .mobile-nav a {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 3px;
+    padding: 7px 2px;
+    color: var(--muted);
+    border-radius: var(--radius-sm);
+    font-size: 10.5px;
+    font-weight: 550;
+    transition: color var(--dur-2) ease, background-color var(--dur-2) ease;
+  }
+  .mobile-nav a.router-link-active { color: var(--plum); background: var(--plum-soft); }
+  .mobile-nav a.router-link-active::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 26%;
+    right: 26%;
+    height: 2px;
+    border-radius: 99px;
+    background: var(--plum);
+    animation: draw-bar var(--dur-2) var(--ease-out) both;
+  }
+
+  /* 登录页转竖排 */
+  .auth-page { grid-template-columns: minmax(0, 1fr); }
+  .auth-context { min-height: 300px; padding: 30px 24px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .auth-form-wrap { padding: 34px 24px 46px; }
+
+  /* 初始化：步骤条转横排 */
+  .setup-layout { grid-template-columns: minmax(0, 1fr); gap: 26px; padding: 24px 18px 52px; }
+  .setup-steps { grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+  .setup-steps > div:not(.setup-privacy) { flex-direction: column; text-align: center; gap: 7px; padding: 4px 2px; }
+  .setup-steps > div:not(.setup-privacy) + div:not(.setup-privacy)::before { display: none; }
+  .setup-steps small { display: none; }
+  .setup-privacy { grid-column: 1 / -1; margin-top: 6px; }
+}
+
+/* ── ≤720px：表格转卡式行（data-label 变行内标签） ─────────────── */
+
+@media (max-width: 720px) {
+  .responsive-table { overflow: visible; margin: 0; padding: 0; }
+  .data-table { min-width: 0; display: block; }
+  .data-table thead { display: none; }
+  .data-table tbody { display: grid; gap: 10px; }
+
+  .data-table tbody tr {
+    display: grid;
+    gap: 7px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .data-table tbody tr:last-child { border-bottom: 0; }
+  .data-table tbody tr:hover { background: none; }
+  .data-table td {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    padding: 0;
+    border: 0;
+  }
+  /* 行内标签由 data-label 提供 */
+  .data-table td::before {
+    content: attr(data-label);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  /* 桌面态的 hover 彩线（data.css）用了 td:first-child::before，
+     特异性高于上面的 td::before，媒体查询不加权，必须在这里把标签文字还回来 */
+  .data-table tbody td:first-child::before {
+    content: attr(data-label);
+    position: static;
+    opacity: 1;
+    transform: none;
+    width: auto;
+    height: auto;
+    background: none;
+    border-radius: 0;
+  }
+  .data-table td.row-actions { text-align: left; }
+  .data-table td.row-actions > * { opacity: 1; }
+  .row-actions { display: flex; gap: 2px; }
+
+  .quota-grid > * + * { padding-left: 0; border-left: 0; margin-left: 0; }
+  .update-overview article { padding: 0; }
+  .update-overview article + article { border-left: 0; padding-top: 16px; border-top: 1px solid var(--line); }
+  .update-phases { grid-auto-flow: row; gap: 14px; padding-top: 8px; }
+  .update-phases::before { top: 8px; bottom: 8px; left: 7px; right: auto; width: 2px; height: auto; }
+  .update-phases > div { grid-template-columns: 15px minmax(0, 1fr); justify-items: start; text-align: left; gap: 12px; align-items: center; }
+  .update-phases > div > i { grid-row: span 2; }
+}
+
+/* ── ≤480px ────────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .page-heading { align-items: stretch; }
+  .heading-actions { width: 100%; }
+  .heading-actions .secondary-button, .heading-actions .primary-button { flex: 1; }
+  .metric-row { gap: 18px 22px; }
+  .metric-row .metric-note { width: 100%; margin-left: 0; }
+  .table-tools { gap: 7px; }
+  .search-field { max-width: none; flex-basis: 100%; }
+  .search-field:focus-within { max-width: none; }
+  .select-control { flex: 1; width: auto; }
+  .batch-actions { margin-left: 0; width: 100%; justify-content: space-between; }
+  .toast-stack { top: 10px; right: 10px; width: calc(100vw - 20px); }
+  .drawer-panel { width: 100vw; }
+  .auth-statement h1 { font-size: 27px; }
+  .quota-ring { width: 50px; height: 50px; }
+  .quota-ring .ring-number strong { font-size: 15px; }
+  .data-table td { grid-template-columns: 74px minmax(0, 1fr); }
+  .review-list > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
