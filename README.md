@@ -3,14 +3,14 @@
 Sub2API 配额中心（服务名 `sub2api-limit-portal`）是一个独立的 Go sidecar：管理员把已经在 Sub2API 中配置好 5h 与 7d 限额的真实 Key 绑定给门户用户，用户登录后可以查看自己的 Key 用量、重置时间，以及管理员公开的全平台账号池状态。
 
 > [!IMPORTANT]
-> 本项目**不代理模型请求，也不自行扣减额度**。5h/7d 限制由 Sub2API 原生执行；门户只做身份管理、绑定和只读状态展示。上游必须是官方 `v0.1.183` 兼容接口，并且不能使用 `simple` 模式。原生并发计费在窗口临界点可能产生少量超额，这是已接受的上游语义。
+> 本项目**不代理模型请求，也不自行扣减额度**。5h/7d 限制由 Sub2API 原生执行；门户负责身份管理、绑定、状态展示，以及由管理员明确触发的官方额度重置。上游必须是官方 `v0.1.183` 兼容接口，并且不能使用 `simple` 模式。原生并发计费在窗口临界点可能产生少量超额，这是已接受的上游语义。
 
 ## 工作方式
 
 ```text
 用户浏览器 ──HTTP :2556─────────────────────────> sub2api-limit-portal
 可选 HTTPS ──> Nginx ──HTTP :2556───────────────>      ├── SQLite（用户、会话、绑定、快照）
-                                                        └── Sub2API Admin API（只读同步）
+                                                        └── Sub2API Admin API（状态同步；管理员可触发额度重置）
 
 用户的模型客户端 ─────────真实 Sub2API Key────────> Sub2API
 ```
@@ -37,9 +37,12 @@ Sub2API 配额中心（服务名 `sub2api-limit-portal`）是一个独立的 Go 
 GET  /api/v1/admin/system/version
 GET  /api/v1/admin/users
 GET  /api/v1/admin/users/:id/api-keys
+PUT  /api/v1/admin/api-keys/:id
 GET  /api/v1/admin/accounts
 POST /api/v1/admin/accounts/usage/batch
 ```
+
+`PUT /api/v1/admin/api-keys/:id` 仅在管理员明确执行单个或批量额度重置时调用，请求体只设置 `reset_rate_limit_usage=true`。这会清零上游 Key 的 5h、1d 与 7d 原生窗口，不是只读操作。
 
 ## 构建与测试
 
@@ -74,16 +77,17 @@ npm --prefix web run typecheck
 npm --prefix web run test
 npm --prefix web run build
 npm --prefix web run test:e2e
+npm --prefix web run test:e2e:production
 ```
 
-Linux 或 macOS 可以运行 `make verify` 和 `make linux`。Windows PowerShell 可构建两个 Linux 单二进制并生成 SHA-256 清单：
+Linux 或 macOS 可以运行 `make verify` 和 `make linux`。Windows PowerShell 可构建门户和特权更新器的 Linux 双架构静态二进制，并生成 SHA-256 清单：
 
 ```powershell
 pwsh -File scripts/build-linux.ps1
 Get-Content dist/SHA256SUMS
 ```
 
-输出为 `dist/sub2api-limit-portal-linux-amd64` 和 `dist/sub2api-limit-portal-linux-arm64`。默认注入版本 `0.1.0`；发布其他版本时传入 `-Version 0.1.1`。构建采用 `CGO_ENABLED=0`，Vue SPA 已通过 `go:embed` 内嵌，不需要在服务器上安装 Node.js 或复制静态目录。
+输出为 `dist/sub2api-limit-{portal,updater}-linux-{amd64,arm64}` 四个文件。默认注入版本 `0.2.0`；发布其他版本时传入 `-Version 0.2.1`。构建采用 `CGO_ENABLED=0`，Vue SPA 已通过 `go:embed` 内嵌，不需要在服务器上安装 Node.js 或复制静态目录。
 
 ## 首次初始化
 
@@ -104,14 +108,14 @@ sudo journalctl -u sub2api-limit-portal.service -n 50 --no-pager
 
 ## Linux 部署
 
-GitHub Release 提供内嵌前端的 Linux `amd64` 和 `arm64` 单二进制包。服务器不需要安装 Go 或 Node.js。
+GitHub Release 提供内嵌前端的 Linux `amd64` 和 `arm64` 包，每个包包含门户和独立更新器两个静态二进制。服务器不需要安装 Go 或 Node.js。
 
 ### 1. 下载并验证 Release
 
-以下命令以 `v0.1.0` 为例，会自动选择当前 CPU 架构：
+以下命令以 `v0.2.0` 为例，会自动选择当前 CPU 架构：
 
 ```bash
-release_version=v0.1.0
+release_version=v0.2.0
 case "$(uname -m)" in
   x86_64|amd64) machine_arch=amd64 ;;
   aarch64|arm64) machine_arch=arm64 ;;
@@ -135,19 +139,22 @@ cd "sub2api5hlimit-${release_version}-linux-${machine_arch}"
 sudo bash ./scripts/install.sh
 ```
 
-安装器会验证二进制、展示所有目标路径并要求确认。首次安装会创建低权限服务账号、生成 AES 主密钥、安装并启动 systemd 服务；再次运行安装器会执行升级，在停服状态下备份二进制及 SQLite/WAL/SHM，失败时自动回滚。
+安装器会验证两个二进制的架构与版本、展示所有目标路径并要求确认。首次安装会创建低权限服务账号、生成 AES 主密钥，同时安装门户服务、root 更新 oneshot 和路径 watcher；再次运行安装器会在停服状态下备份两个二进制、三个 unit 及 SQLite/WAL/SHM，失败时自动回滚。
 
 默认布局：
 
 | 内容 | 路径 |
 | --- | --- |
 | 安装根目录 | `/opt/sub2api5hlimit` |
-| 二进制 | `/opt/sub2api5hlimit/bin/sub2api-limit-portal` |
+| 门户二进制 | `/opt/sub2api5hlimit/bin/sub2api-limit-portal` |
+| 更新器二进制 | `/opt/sub2api5hlimit/bin/sub2api-limit-updater` |
 | 环境文件 | `/opt/sub2api5hlimit/config/sub2api-limit-portal.env` |
 | SQLite | `/opt/sub2api5hlimit/data/app.db` |
 | 升级与手工备份 | `/opt/sub2api5hlimit/backups/` |
+| 更新状态 | `/opt/sub2api5hlimit/update/status.json` |
+| 更新恢复事务 | `/opt/sub2api5hlimit/update/transaction.json`（仅执行期间存在） |
 | 卸载器 | `/opt/sub2api5hlimit/uninstall.sh` |
-| systemd unit | `/etc/systemd/system/sub2api-limit-portal.service` |
+| systemd units | `/etc/systemd/system/sub2api-limit-portal{,-update}.{service,path}` |
 
 生产默认配置为：
 
@@ -212,9 +219,43 @@ curl --fail --silent http://127.0.0.1:2556/readyz
 - `/healthz` 只表示进程 HTTP 服务存活。
 - `/readyz` 检查初始化、数据库和主密钥；上游短暂离线不会使其失败。
 
-### 6. 升级与卸载
+### 6. 升级与自更新
 
-下载并校验新版本 Release，解压后再次运行安装器即可升级：
+`v0.2.0` 是自更新功能的首次引导版本。`v0.1.x` 没有更新器和 systemd watcher，因此从旧版升级到 `v0.2.0` 必须下载并校验 `v0.2.0` Release，然后人工运行一次包内安装器：
+
+```bash
+sudo bash ./scripts/install.sh
+```
+
+完成这次引导后，管理员可在“程序更新”页检查并申请更新。门户进程只会以服务账号原子写入 `/opt/sub2api5hlimit/data/update.request`，其中只有 `schema`、随机操作 ID、目标版本和请求时间；它不能写安装目录，也不能控制 systemd。该请求会一直保留到更新成功、确定失败或完成回滚，避免进程中断后丢失唤醒条件。`sub2api-limit-portal-update.path` 会同时监视请求和 root updater 的恢复事务，随后启动 root oneshot 独立执行以下检查和事务：
+
+1. 从固定的官方 GitHub `releases/latest` API 重新取得最新稳定版本，并要求它与请求目标一致。
+2. 严格解析只有 `schema/version/min_updater_version/mode` 四字段的 `update-manifest.json`；只接受 `schema=1` 且 `mode=binary`。
+3. 按本机 `amd64` 或 `arm64` 选择固定命名的归档，分别核对 GitHub 资产 `sha256` digest、`SHA256SUMS` 和实际下载摘要，并拒绝超限、路径穿越、链接、设备文件或缺少二进制的 tar。
+4. 停止原门户前先原子写入 `/opt/sub2api5hlimit/update/transaction.json`；把两个旧二进制及同一停服时刻的 SQLite/WAL/SHM 复制到 `/opt/sub2api5hlimit/backups/update-*`，持久化完整备份清单后，再以同目录 `rename` 原子替换两个二进制。
+5. 重启并同时检查 systemd active、`/readyz` 与门户版本；任一步失败都会停掉新进程、恢复两个二进制和数据库三件套，并重新验证旧服务。
+
+回滚与断点恢复分别为停服、文件恢复、旧服务启动及健康检查保留独立超时预算；大数据库复制不会消耗掉后续启动旧服务的时间窗口。
+
+如果 updater 被 `SIGKILL`、主机重启或意外断电打断，请求或恢复事务仍会让 path watcher 再次启动 updater。它会在处理任何新下载前验证事务清单，停止可能处于中间状态的门户，恢复旧二进制和离线数据库快照，并核对旧版本及 `/readyz`；只有恢复完成后才删除事务与请求标记。不要手工删除 `transaction.json`。
+
+涉及目录布局、安装脚本或 systemd unit 变化的 Release 必须把 manifest 标为 `mode=manual`。页面会提示人工下载 Release 并再次运行安装器，root updater 不会自行改写 `/etc/systemd/system`。查看 watcher、执行日志和状态文件：
+
+Release workflow 从仓库内的 `packaging/update-policy.json` 生成 manifest。该策略文件只允许 `min_updater_version` 与 `mode` 两个字段，并随代码评审；当前 `v0.2.0` 因首次引入 updater、目录和 systemd units，策略为 `manual`。发布后续纯二进制版本前，维护者才可把 `mode` 明确改为 `binary`。
+
+```bash
+sudo systemctl status sub2api-limit-portal-update.path
+sudo journalctl -u sub2api-limit-portal-update.service -n 100 --no-pager
+sudo cat /opt/sub2api5hlimit/update/status.json
+```
+
+`status.json` 只包含操作 ID、目标版本、状态阶段、稳定错误码和 UTC Unix 秒时间，不写下载 URL、路径或底层错误详情。若更新器报告 `rollback_failed`，保持服务隔离并使用对应 `backups/update-*` 目录人工恢复；不要连续重复更新。
+
+GitHub 资产 digest 与 `SHA256SUMS` 可以发现传输或资产不一致，但二者处于同一个 GitHub Release 信任边界，并不等同于独立的签名验证。高保证环境应继续人工固定 Release tag 与摘要。
+
+### 7. 手工升级与卸载
+
+manifest 要求人工升级，或自更新 helper 不可用时，下载并校验新版本 Release，解压后再次运行包内安装器：
 
 ```bash
 sudo bash ./scripts/install.sh
@@ -232,7 +273,7 @@ sudo /opt/sub2api5hlimit/uninstall.sh
 sudo /opt/sub2api5hlimit/uninstall.sh --purge
 ```
 
-### 7. 旧路径迁移
+### 8. 旧路径迁移
 
 若检测到旧版 `/usr/local`、`/etc/sub2api-limit-portal` 或 `/var/lib/sub2api-limit-portal` 布局且新安装根不存在，安装器会中止。它不会猜测主密钥或自动创建空数据库。
 
@@ -310,6 +351,13 @@ trap - EXIT INT TERM
 | `GET, PUT /api/admin/pool` | 查看账号池；批量发布或取消发布账号 |
 | `GET, PUT /api/admin/settings` | 查看或更新上游连接设置 |
 | `POST /api/admin/sync` | 手动触发 `all`、`keys`、`accounts` 或 `usage` 同步 |
+| `POST /api/admin/users/:id/quota-reset` | 重置一个绑定用户的上游 Key 原生额度窗口 |
+| `POST /api/admin/quota-resets` | 创建批量额度重置任务 |
+| `GET /api/admin/quota-resets/current` | 查询当前批量重置任务 |
+| `GET /api/admin/quota-resets/:id` | 查询指定批量重置任务 |
+| `GET /api/admin/update` | 查看当前版本、最新稳定版和更新执行状态 |
+| `POST /api/admin/update/check` | 立即重新检查官方稳定 Release |
+| `POST /api/admin/update/apply` | 写入一次版本绑定的自更新请求 |
 
 核心视图类型：
 
@@ -326,12 +374,14 @@ SnapshotMeta   { as_of, source_updated_at, last_success_at, stale }
 ### 信任边界
 
 - 主机 root、systemd 环境文件、SQLite 文件、Nginx 和 Sub2API 管理端都属于可信计算基。
+- root 更新器属于可信计算基，但不加载门户 EnvironmentFile 或 Admin API Key。门户服务账号只能写请求标记；只有 root oneshot 能写二进制、离线备份与更新状态。
 - 普通门户用户互不信任，只能读取自己的 Key 状态；所有已登录用户都能读取管理员明确发布的脱敏账号池状态。
 - 程序默认通过 `0.0.0.0:2556` 提供公网 HTTP。部署管理员可自行增加 Nginx HTTPS、防火墙或其他访问控制；使用 HTTPS 时应同步启用 Secure Cookie。
 
 ### 重要风险
 
 - **Admin API Key 是全权限凭据。** Sub2API `v0.1.183` 没有满足本服务所需接口的细粒度只读令牌。数据库中虽为 AES-256-GCM 密文，但同时取得数据库和环境主密钥的攻击者仍可恢复它。必须限制主机、配置文件、备份与 journal 的访问。
+- 管理员额度重置会调用全权限上游接口，并同时清零目标 Key 的 5h、1d 和 7d 原生窗口。批量操作不可撤销，执行前应核对目标集合。
 - 门户不参与请求转发或扣费。攻击者绕过门户仍只能使用真实 Sub2API Key，限额成败完全取决于非 `simple` 模式的 Sub2API。原生并发检查在临界点允许少量超额。
 - 上游被攻陷或返回伪造状态时，门户无法独立验证计费事实；它会把成功解析的上游响应作为快照展示。
 - 本项目不抵御已取得 root、管理员浏览器会话或 Sub2API 管理权限的攻击者，也不提供 DDoS 防护、MFA、邮件找回、密钥轮换编排或多实例一致性。

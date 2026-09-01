@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/MengStar-L/sub2api5hlimit/internal/releasecheck"
 	"github.com/MengStar-L/sub2api5hlimit/internal/store"
 )
 
@@ -26,9 +27,27 @@ type KeyCache struct {
 	LastError string
 }
 
+type QuotaResetResult struct {
+	UpstreamKeyID   int64   `json:"upstream_key_id"`
+	Applied         bool    `json:"applied"`
+	SnapshotUpdated bool    `json:"snapshot_updated"`
+	Usage5h         float64 `json:"-"`
+	Usage7d         float64 `json:"-"`
+	Reset5hAt       *int64  `json:"-"`
+	Reset7dAt       *int64  `json:"-"`
+	SourceUpdatedAt *int64  `json:"-"`
+}
+
 type UpstreamManager interface {
 	Probe(context.Context, store.Settings, bool) (ProbeResult, error)
 	CachedKeys() KeyCache
-	ClearSnapshots()
+	BeginConnectionRotation() func()
 	Sync(context.Context, string) error
+	ResetQuota(context.Context, int64) (QuotaResetResult, error)
+}
+
+type UpdateManager interface {
+	View(context.Context) (releasecheck.View, error)
+	Check(context.Context) (releasecheck.View, error)
+	Apply(context.Context, string, int64) (releasecheck.ApplyResult, error)
 }

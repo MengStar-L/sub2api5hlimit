@@ -31,6 +31,11 @@ type Manager struct {
 	group singleflight.Group
 	limit chan struct{}
 
+	connectionMu         sync.Mutex
+	connectionGeneration uint64
+	keySnapshotMu        sync.Mutex
+	keyGeneration        uint64
+
 	cacheMu sync.RWMutex
 	keys    httpapi.KeyCache
 }
@@ -46,10 +51,17 @@ func (m *Manager) CachedKeys() httpapi.KeyCache {
 	return httpapi.KeyCache{Items: copyItems, FetchedAt: m.keys.FetchedAt, LastError: m.keys.LastError}
 }
 
-func (m *Manager) ClearSnapshots() {
+func (m *Manager) BeginConnectionRotation() func() {
+	m.connectionMu.Lock()
+	m.connectionGeneration++
+	for _, scope := range []string{"keys", "accounts", "usage"} {
+		m.group.Forget(scope)
+	}
 	m.cacheMu.Lock()
 	m.keys = httpapi.KeyCache{}
 	m.cacheMu.Unlock()
+	var once sync.Once
+	return func() { once.Do(m.connectionMu.Unlock) }
 }
 
 func (m *Manager) Probe(ctx context.Context, settings store.Settings, full bool) (httpapi.ProbeResult, error) {
@@ -127,8 +139,55 @@ func (m *Manager) Sync(ctx context.Context, scope string) error {
 	}
 }
 
+// ResetQuota applies the official all-window reset for one upstream key and
+// immediately persists the endpoint's safe usage snapshot. The HTTP workflow
+// still triggers a complete key-list sync (once for a batch) to reconcile all
+// other key metadata.
+func (m *Manager) ResetQuota(ctx context.Context, keyID int64) (httpapi.QuotaResetResult, error) {
+	result := httpapi.QuotaResetResult{UpstreamKeyID: keyID}
+	connectionGeneration, settings, err := m.connectionSettings(ctx)
+	if err != nil {
+		return result, err
+	}
+	client, err := newClient(settings)
+	if err != nil {
+		return result, err
+	}
+	reset, err := client.ResetAPIKeyRateLimitUsage(ctx, keyID)
+	if err != nil {
+		return result, err
+	}
+	result.Applied = true
+	result.Usage5h = reset.Usage5h
+	result.Usage7d = reset.Usage7d
+	result.Reset5hAt = store.UnixPtr(reset.Reset5hAt)
+	result.Reset7dAt = store.UnixPtr(reset.Reset7dAt)
+	result.SourceUpdatedAt = store.UnixPtr(reset.UpdatedAt)
+	appliedAt := time.Now().Unix()
+	m.connectionMu.Lock()
+	if connectionGeneration != m.connectionGeneration {
+		m.connectionMu.Unlock()
+		return result, fmt.Errorf("upstream connection changed after confirmed quota reset")
+	}
+	m.keySnapshotMu.Lock()
+	m.keyGeneration++
+	// A keys sync that started before this confirmed mutation must not publish
+	// its old response, and the caller's reconciliation must start a new flight.
+	m.group.Forget("keys")
+	if err := m.store.ApplyQuotaResetSnapshot(ctx, keyID, result.Usage5h, result.Usage7d,
+		result.Reset5hAt, result.Reset7dAt, result.SourceUpdatedAt, appliedAt); err != nil {
+		m.keySnapshotMu.Unlock()
+		m.connectionMu.Unlock()
+		return result, fmt.Errorf("persist confirmed quota reset snapshot: %w", err)
+	}
+	m.keySnapshotMu.Unlock()
+	m.connectionMu.Unlock()
+	result.SnapshotUpdated = true
+	return result, nil
+}
+
 func (m *Manager) syncOne(ctx context.Context, scope string) error {
-	settings, err := m.store.GetSettings(ctx)
+	connectionGeneration, settings, err := m.connectionSettings(ctx)
 	if err != nil {
 		return err
 	}
@@ -138,41 +197,82 @@ func (m *Manager) syncOne(ctx context.Context, scope string) error {
 	}
 	switch scope {
 	case "keys":
-		return m.syncKeys(ctx, client, settings.OwnerUserID)
+		return m.syncKeys(ctx, client, settings.OwnerUserID, connectionGeneration)
 	case "accounts":
-		return m.syncAccounts(ctx, client)
+		return m.syncAccounts(ctx, client, connectionGeneration)
 	case "usage":
-		return m.syncUsage(ctx, client)
+		return m.syncUsage(ctx, client, connectionGeneration)
 	default:
 		return fmt.Errorf("unknown sync scope %q", scope)
 	}
 }
 
-func (m *Manager) syncKeys(ctx context.Context, client *sub2api.Client, ownerID int64) error {
+func (m *Manager) connectionSettings(ctx context.Context) (uint64, store.Settings, error) {
+	m.connectionMu.Lock()
+	defer m.connectionMu.Unlock()
+	settings, err := m.store.GetSettings(ctx)
+	return m.connectionGeneration, settings, err
+}
+
+func (m *Manager) withConnectionGeneration(generation uint64, apply func() error) (bool, error) {
+	m.connectionMu.Lock()
+	defer m.connectionMu.Unlock()
+	if generation != m.connectionGeneration {
+		return false, nil
+	}
+	return true, apply()
+}
+
+func (m *Manager) syncKeys(ctx context.Context, client *sub2api.Client, ownerID int64, connectionGeneration uint64) error {
+	m.keySnapshotMu.Lock()
+	generation := m.keyGeneration
+	m.keySnapshotMu.Unlock()
 	keys, err := client.ListAPIKeys(ctx, ownerID)
 	if err != nil {
-		code := syncErrorCode(err)
-		_ = m.store.MarkKeySyncFailed(context.WithoutCancel(ctx), code)
-		m.cacheMu.Lock()
-		m.keys.LastError = code
-		m.cacheMu.Unlock()
+		current, applyErr := m.withConnectionGeneration(connectionGeneration, func() error {
+			m.keySnapshotMu.Lock()
+			defer m.keySnapshotMu.Unlock()
+			if generation != m.keyGeneration {
+				return nil
+			}
+			code := syncErrorCode(err)
+			_ = m.store.MarkKeySyncFailed(context.WithoutCancel(ctx), code)
+			m.cacheMu.Lock()
+			m.keys.LastError = code
+			m.cacheMu.Unlock()
+			return nil
+		})
+		if applyErr != nil {
+			return applyErr
+		}
+		if !current {
+			return nil
+		}
 		return err
 	}
 	now := time.Now()
 	snapshots := keySnapshots(keys)
-	if err := m.store.ApplyKeySnapshots(ctx, snapshots, now.Unix()); err != nil {
-		return err
-	}
-	if err := m.store.MarkSync(ctx, "keys", now.Unix()); err != nil {
-		return err
-	}
-	m.cacheMu.Lock()
-	m.keys = httpapi.KeyCache{Items: snapshots, FetchedAt: now}
-	m.cacheMu.Unlock()
-	return nil
+	_, err = m.withConnectionGeneration(connectionGeneration, func() error {
+		m.keySnapshotMu.Lock()
+		defer m.keySnapshotMu.Unlock()
+		if generation != m.keyGeneration {
+			return nil
+		}
+		if err := m.store.ApplyKeySnapshots(ctx, snapshots, now.Unix()); err != nil {
+			return err
+		}
+		if err := m.store.MarkSync(ctx, "keys", now.Unix()); err != nil {
+			return err
+		}
+		m.cacheMu.Lock()
+		m.keys = httpapi.KeyCache{Items: snapshots, FetchedAt: now}
+		m.cacheMu.Unlock()
+		return nil
+	})
+	return err
 }
 
-func (m *Manager) syncAccounts(ctx context.Context, client *sub2api.Client) error {
+func (m *Manager) syncAccounts(ctx context.Context, client *sub2api.Client, connectionGeneration uint64) error {
 	accounts, err := client.ListAccounts(ctx)
 	if err != nil {
 		return err
@@ -185,24 +285,36 @@ func (m *Manager) syncAccounts(ctx context.Context, client *sub2api.Client) erro
 			AccountType: account.Type, PlanType: account.PlanType, Status: account.Status, Schedulable: account.Schedulable,
 		})
 	}
-	if err := m.store.ApplyPoolInventory(ctx, items, now); err != nil {
-		return err
-	}
-	return m.store.MarkSync(ctx, "accounts", now)
+	_, err = m.withConnectionGeneration(connectionGeneration, func() error {
+		if err := m.store.ApplyPoolInventory(ctx, items, now); err != nil {
+			return err
+		}
+		return m.store.MarkSync(ctx, "accounts", now)
+	})
+	return err
 }
 
-func (m *Manager) syncUsage(ctx context.Context, client *sub2api.Client) error {
+func (m *Manager) syncUsage(ctx context.Context, client *sub2api.Client, connectionGeneration uint64) error {
 	ids, err := m.store.PublishedAccountIDs(ctx)
 	if err != nil {
 		return err
 	}
 	now := time.Now().Unix()
 	if len(ids) == 0 {
-		return m.store.MarkSync(ctx, "usage", now)
+		_, err := m.withConnectionGeneration(connectionGeneration, func() error { return m.store.MarkSync(ctx, "usage", now) })
+		return err
 	}
 	result, err := client.BatchAccountUsage(ctx, ids)
 	if err != nil {
-		_ = m.store.MarkPoolUsageFailed(context.WithoutCancel(ctx), syncErrorCode(err))
+		current, applyErr := m.withConnectionGeneration(connectionGeneration, func() error {
+			return m.store.MarkPoolUsageFailed(context.WithoutCancel(ctx), syncErrorCode(err))
+		})
+		if applyErr != nil {
+			return applyErr
+		}
+		if !current {
+			return nil
+		}
 		return err
 	}
 	items := make([]store.PoolUsage, 0, len(ids))
@@ -235,10 +347,13 @@ func (m *Manager) syncUsage(ctx context.Context, client *sub2api.Client) error {
 		}
 		items = append(items, item)
 	}
-	if err := m.store.ApplyPoolUsage(ctx, items, now); err != nil {
-		return err
-	}
-	return m.store.MarkSync(ctx, "usage", now)
+	_, err = m.withConnectionGeneration(connectionGeneration, func() error {
+		if err := m.store.ApplyPoolUsage(ctx, items, now); err != nil {
+			return err
+		}
+		return m.store.MarkSync(ctx, "usage", now)
+	})
+	return err
 }
 
 func safeUsageSource(value string) string {

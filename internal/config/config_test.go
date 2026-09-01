@@ -16,7 +16,9 @@ func TestLoadUsesPublicHTTPDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Listen != "0.0.0.0:2556" || cfg.DBPath != filepath.Join("data", "app.db") || cfg.CookieSecure {
+	if cfg.Listen != "0.0.0.0:2556" || cfg.DBPath != filepath.Join("data", "app.db") || cfg.CookieSecure ||
+		cfg.UpdateStatusPath != "/opt/sub2api5hlimit/update/status.json" ||
+		cfg.UpdaterPath != "/opt/sub2api5hlimit/bin/sub2api-limit-updater" {
 		t.Fatalf("defaults = %#v", cfg)
 	}
 }

@@ -2,7 +2,7 @@
 param(
     [switch]$SkipWeb,
     [ValidatePattern('^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$')]
-    [string]$Version = '0.1.0'
+    [string]$Version = '0.2.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,9 +47,11 @@ try {
         $env:GOOS = 'linux'
         $env:GOARCH = $arch
         $env:CGO_ENABLED = '0'
-        $output = Join-Path $distDir "sub2api-limit-portal-linux-$arch"
-        Invoke-Checked -Command go -Arguments @('build', '-trimpath', "-ldflags=$ldflags", '-o', $output, './cmd/sub2api-limit-portal')
-        $artifacts += Get-Item $output
+        foreach ($program in @('portal', 'updater')) {
+            $output = Join-Path $distDir "sub2api-limit-$program-linux-$arch"
+            Invoke-Checked -Command go -Arguments @('build', '-trimpath', "-ldflags=$ldflags", '-o', $output, "./cmd/sub2api-limit-$program")
+            $artifacts += Get-Item $output
+        }
     }
 
     $checksumLines = foreach ($artifact in $artifacts) {
@@ -57,7 +59,7 @@ try {
         "$hash  $($artifact.Name)"
     }
     [System.IO.File]::WriteAllLines((Join-Path $distDir 'SHA256SUMS'), $checksumLines)
-    Write-Host "Built Linux amd64 and arm64 artifacts in $distDir"
+    Write-Host "Built portal and updater Linux amd64/arm64 artifacts in $distDir"
 }
 finally {
     $env:GOOS = $oldGoos

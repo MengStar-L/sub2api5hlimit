@@ -206,6 +206,58 @@ func TestHTTPAPILifecycleRBACAndSecretBoundary(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("GET users = %d, body = %s", status, body)
 	}
+	var adminUsers struct {
+		Data []adminUserView `json:"data"`
+	}
+	decodeResponse(t, body, &adminUsers)
+	var aliceView *adminUserView
+	for index := range adminUsers.Data {
+		if adminUsers.Data[index].ID == aliceID {
+			aliceView = &adminUsers.Data[index]
+			break
+		}
+	}
+	if aliceView == nil || !aliceView.Resettable || aliceView.FiveHour == nil || aliceView.SevenDay == nil {
+		t.Fatalf("admin user quota view = %#v", aliceView)
+	}
+	if aliceView.FiveHour.LimitUSD != 10 || aliceView.FiveHour.UsedUSD != 2 || aliceView.SevenDay.LimitUSD != 100 || aliceView.SevenDay.UsedUSD != 20 {
+		t.Fatalf("admin user windows = 5h:%#v 7d:%#v", aliceView.FiveHour, aliceView.SevenDay)
+	}
+	if aliceView.Snapshot.LastSuccessAt == nil || aliceView.Snapshot.AsOf <= 0 {
+		t.Fatalf("admin user snapshot = %#v", aliceView.Snapshot)
+	}
+	fixture.upstream.mu.Lock()
+	fixture.upstream.resetFn = func(_ context.Context, keyID int64) (QuotaResetResult, error) {
+		if keyID != 1001 {
+			return QuotaResetResult{UpstreamKeyID: keyID}, fmt.Errorf("unexpected key id %d", keyID)
+		}
+		resetSnapshot := fixture.upstream.keys[0]
+		resetSnapshot.Usage5h = 0
+		resetSnapshot.Usage7d = 0
+		resetSnapshot.Reset5hAt = nil
+		resetSnapshot.Reset7dAt = nil
+		if err := fixture.store.ApplyKeySnapshots(context.Background(), []store.KeySnapshot{resetSnapshot, fixture.upstream.keys[1]}, time.Now().Unix()); err != nil {
+			return QuotaResetResult{UpstreamKeyID: keyID, Applied: true}, err
+		}
+		return QuotaResetResult{UpstreamKeyID: keyID, Applied: true}, nil
+	}
+	fixture.upstream.mu.Unlock()
+	status, body, _ = fixture.request(t, adminClient, http.MethodPost, fmt.Sprintf("/api/admin/users/%d/quota-reset", aliceID), nil, fixture.server.URL, adminCSRF)
+	if status != http.StatusOK {
+		t.Fatalf("POST single quota reset = %d, body = %s", status, body)
+	}
+	fixture.upstream.waitForSync(t, "keys")
+	var resetResponse struct {
+		Data quotaResetResponse `json:"data"`
+	}
+	decodeResponse(t, body, &resetResponse)
+	if resetResponse.Data.Status != store.QuotaResetItemSucceeded || !resetResponse.Data.SnapshotUpdated || resetResponse.Data.UpstreamKeyID != 1001 {
+		t.Fatalf("single reset response = %#v", resetResponse.Data)
+	}
+	resetBinding, err := fixture.store.BindingByUser(ctx, aliceID)
+	if err != nil || resetBinding.Usage5h != 0 || resetBinding.Usage7d != 0 {
+		t.Fatalf("single reset binding = %#v, err=%v", resetBinding, err)
+	}
 
 	aliceClient := newCookieClient(t)
 	status, body, cookies = fixture.request(t, aliceClient, http.MethodPost, "/api/auth/login", map[string]any{
@@ -312,21 +364,43 @@ func TestHTTPAPILifecycleRBACAndSecretBoundary(t *testing.T) {
 }
 
 type fakeUpstreamManager struct {
-	mu       sync.Mutex
-	probe    ProbeResult
-	keys     []store.KeySnapshot
-	settings []store.Settings
-	syncs    chan string
-	clears   int
+	mu                sync.Mutex
+	probe             ProbeResult
+	probeFn           func(context.Context, store.Settings, bool) (ProbeResult, error)
+	keys              []store.KeySnapshot
+	settings          []store.Settings
+	syncs             chan string
+	syncErr           error
+	clears            int
+	rotationStarted   chan struct{}
+	rotationRelease   chan struct{}
+	clearKeysOnRotate bool
+	resets            []int64
+	resetFn           func(context.Context, int64) (QuotaResetResult, error)
 }
 
-func (f *fakeUpstreamManager) Probe(_ context.Context, settings store.Settings, _ bool) (ProbeResult, error) {
+func (f *fakeUpstreamManager) ResetQuota(ctx context.Context, keyID int64) (QuotaResetResult, error) {
+	f.mu.Lock()
+	f.resets = append(f.resets, keyID)
+	resetFn := f.resetFn
+	f.mu.Unlock()
+	if resetFn != nil {
+		return resetFn(ctx, keyID)
+	}
+	return QuotaResetResult{UpstreamKeyID: keyID, Applied: true}, nil
+}
+
+func (f *fakeUpstreamManager) Probe(ctx context.Context, settings store.Settings, full bool) (ProbeResult, error) {
 	f.mu.Lock()
 	f.settings = append(f.settings, settings)
+	probeFn := f.probeFn
 	result := f.probe
 	result.Keys = append([]store.KeySnapshot(nil), f.probe.Keys...)
 	result.Owners = append([]Owner(nil), f.probe.Owners...)
 	f.mu.Unlock()
+	if probeFn != nil {
+		return probeFn(ctx, settings, full)
+	}
 	return result, nil
 }
 
@@ -336,18 +410,33 @@ func (f *fakeUpstreamManager) CachedKeys() KeyCache {
 	return KeyCache{Items: append([]store.KeySnapshot(nil), f.keys...), FetchedAt: time.Now()}
 }
 
-func (f *fakeUpstreamManager) ClearSnapshots() {
+func (f *fakeUpstreamManager) BeginConnectionRotation() func() {
 	f.mu.Lock()
 	f.clears++
+	started := f.rotationStarted
+	release := f.rotationRelease
+	if f.clearKeysOnRotate {
+		f.keys = nil
+	}
 	f.mu.Unlock()
+	if started != nil {
+		close(started)
+	}
+	if release != nil {
+		<-release
+	}
+	return func() {}
 }
 
 func (f *fakeUpstreamManager) Sync(_ context.Context, scope string) error {
+	f.mu.Lock()
+	syncErr := f.syncErr
+	f.mu.Unlock()
 	select {
 	case f.syncs <- scope:
 	default:
 	}
-	return nil
+	return syncErr
 }
 
 func (f *fakeUpstreamManager) lastProbe() store.Settings {

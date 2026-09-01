@@ -9,6 +9,17 @@ const (
 	StatusActive   = "active"
 	StatusDisabled = "disabled"
 	StatusDeleted  = "deleted"
+
+	QuotaResetJobQueued    = "queued"
+	QuotaResetJobRunning   = "running"
+	QuotaResetJobCompleted = "completed"
+
+	QuotaResetItemPending   = "pending"
+	QuotaResetItemRunning   = "running"
+	QuotaResetItemSucceeded = "succeeded"
+	QuotaResetItemFailed    = "failed"
+	QuotaResetItemUnknown   = "unknown"
+	QuotaResetItemSkipped   = "skipped"
 )
 
 type User struct {
@@ -139,6 +150,40 @@ type PoolUsage struct {
 type SetupStatus struct {
 	Complete  bool  `json:"complete"`
 	ExpiresAt int64 `json:"expires_at,omitempty"`
+}
+
+type QuotaResetJob struct {
+	ID                int64               `json:"id"`
+	Status            string              `json:"status"`
+	TotalCount        int                 `json:"total_count"`
+	PendingCount      int                 `json:"pending_count"`
+	RunningCount      int                 `json:"running_count"`
+	SucceededCount    int                 `json:"succeeded_count"`
+	FailedCount       int                 `json:"failed_count"`
+	UnknownCount      int                 `json:"unknown_count"`
+	SkippedCount      int                 `json:"skipped_count"`
+	RequestedByUserID *int64              `json:"requested_by_user_id,omitempty"`
+	CreatedAt         int64               `json:"created_at"`
+	StartedAt         *int64              `json:"started_at,omitempty"`
+	CompletedAt       *int64              `json:"completed_at,omitempty"`
+	Items             []QuotaResetJobItem `json:"items,omitempty"`
+}
+
+type QuotaResetJobItem struct {
+	ID            int64  `json:"id"`
+	JobID         int64  `json:"job_id"`
+	UserID        int64  `json:"user_id"`
+	Username      string `json:"username"`
+	DisplayName   string `json:"display_name"`
+	UserStatus    string `json:"user_status"`
+	UpstreamKeyID *int64 `json:"upstream_key_id,omitempty"`
+	KeyMask       string `json:"key_mask"`
+	Status        string `json:"status"`
+	ErrorCode     string `json:"error_code,omitempty"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+	StartedAt     *int64 `json:"started_at,omitempty"`
+	CompletedAt   *int64 `json:"completed_at,omitempty"`
 }
 
 func UnixPtr(t *time.Time) *int64 {

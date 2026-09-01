@@ -282,6 +282,49 @@ func TestDeleteUserIsSoftAndRemovesAccessState(t *testing.T) {
 	}
 }
 
+func TestApplyQuotaResetSnapshotUpdatesOnlySafeUsageFields(t *testing.T) {
+	ctx := context.Background()
+	data, _ := openTestStore(t)
+	reset5h := int64(1700)
+	reset7d := int64(2300)
+	sourceBefore := int64(1600)
+	snapshot := compliantSnapshot(350)
+	snapshot.Name = "quota-key"
+	snapshot.Mask = "sk-…safe"
+	snapshot.Status = "active"
+	snapshot.Usage5h = 8
+	snapshot.Usage7d = 80
+	snapshot.Reset5hAt = &reset5h
+	snapshot.Reset7dAt = &reset7d
+	snapshot.SourceUpdatedAt = &sourceBefore
+	user, err := data.CreateUser(ctx, "quota-user", "Quota User", "hash", &snapshot, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sourceAfter := int64(1999)
+	if err := data.ApplyQuotaResetSnapshot(ctx, snapshot.UpstreamKeyID, 0, 0, nil, nil, &sourceAfter, 2000); err != nil {
+		t.Fatalf("ApplyQuotaResetSnapshot() error = %v", err)
+	}
+	binding, err := data.BindingByUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binding.Usage5h != 0 || binding.Usage7d != 0 || binding.Reset5hAt != nil || binding.Reset7dAt != nil {
+		t.Fatalf("reset usage fields = %#v", binding)
+	}
+	if binding.SourceUpdatedAt == nil || *binding.SourceUpdatedAt != sourceAfter || binding.LastSuccessAt == nil || *binding.LastSuccessAt != 2000 {
+		t.Fatalf("reset snapshot timestamps = %#v", binding)
+	}
+	if binding.UpstreamKeyID != snapshot.UpstreamKeyID || binding.KeyName != snapshot.Name || binding.KeyMask != snapshot.Mask ||
+		binding.UpstreamStatus != snapshot.Status || binding.RateLimit5h != snapshot.RateLimit5h || binding.RateLimit7d != snapshot.RateLimit7d {
+		t.Fatalf("reset changed immutable binding fields: %#v", binding)
+	}
+	if err := data.ApplyQuotaResetSnapshot(ctx, 999999, 0, 0, nil, nil, nil, 2001); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("ApplyQuotaResetSnapshot(missing) error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestKeySnapshotMissingConfigurationErrorAndRecovery(t *testing.T) {
 	ctx := context.Background()
 	store, _ := openTestStore(t)

@@ -3,8 +3,11 @@ import type {
   ConnectionSettings,
   DashboardData,
   PoolAccount,
+  QuotaResetJob,
   SessionData,
   SetupStatus,
+  UpdateApplyResult,
+  UpdateView,
   UpstreamKey,
 } from '@/types'
 
@@ -66,6 +69,10 @@ export const api = {
   updateUser: (id: AdminUser['id'], payload: Record<string, unknown>) => request<AdminUser>(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'PUT', body: json(payload) }),
   deleteUser: (id: AdminUser['id']) => request<void>(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   resetUserPassword: (id: AdminUser['id'], password: string) => request<void>(`/api/admin/users/${encodeURIComponent(id)}/password`, { method: 'PUT', body: json({ password }) }),
+  resetUserQuota: (id: AdminUser['id']) => request<{ snapshot_updated?: boolean }>(`/api/admin/users/${encodeURIComponent(id)}/quota-reset`, { method: 'POST', body: json({}) }),
+  createQuotaReset: () => request<QuotaResetJob>('/api/admin/quota-resets', { method: 'POST', body: json({ scope: 'all_non_deleted' }) }),
+  currentQuotaReset: () => request<QuotaResetJob>('/api/admin/quota-resets/current'),
+  quotaReset: (id: QuotaResetJob['id']) => request<QuotaResetJob>(`/api/admin/quota-resets/${encodeURIComponent(id)}`),
   bindUserKey: (id: AdminUser['id'], upstream_key_id: UpstreamKey['id']) => request<void>(`/api/admin/users/${encodeURIComponent(id)}/binding`, { method: 'PUT', body: json({ upstream_key_id: Number(upstream_key_id) }) }),
   unbindUserKey: (id: AdminUser['id']) => request<void>(`/api/admin/users/${encodeURIComponent(id)}/binding`, { method: 'DELETE' }),
   upstreamKeys: async () => normalizeList<UpstreamKey>(await request<UpstreamKey[] | { keys: UpstreamKey[] }>('/api/admin/upstream-keys'), 'keys'),
@@ -74,6 +81,9 @@ export const api = {
   settings: () => request<ConnectionSettings>('/api/admin/settings'),
   updateSettings: (payload: Record<string, unknown>) => request<ConnectionSettings>('/api/admin/settings', { method: 'PUT', body: json({ ...payload, owner_user_id: Number(payload.owner_user_id) }) }),
   sync: (scope: 'all' | 'keys' | 'accounts' | 'usage') => request<{ started?: boolean; message?: string }>('/api/admin/sync', { method: 'POST', body: json({ scope }) }),
+  update: () => request<UpdateView>('/api/admin/update'),
+  checkUpdate: () => request<UpdateView>('/api/admin/update/check', { method: 'POST', body: json({}) }),
+  applyUpdate: (targetVersion: string) => request<UpdateApplyResult>('/api/admin/update/apply', { method: 'POST', body: json({ target_version: targetVersion }) }),
 }
 
 function normalizeList<T>(value: T[] | Record<string, T[]>, key: string): T[] {

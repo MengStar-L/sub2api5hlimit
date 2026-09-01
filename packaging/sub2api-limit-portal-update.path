@@ -1,0 +1,14 @@
+[Unit]
+Description=Watch for Sub2API quota portal update requests
+Documentation=https://github.com/MengStar-L/sub2api5hlimit
+After=sub2api-limit-portal.service
+
+[Path]
+PathExists=/opt/sub2api5hlimit/data/update.request
+PathExists=/opt/sub2api5hlimit/update/transaction.json
+Unit=sub2api-limit-portal-update.service
+TriggerLimitIntervalSec=5min
+TriggerLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target

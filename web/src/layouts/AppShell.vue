@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import {
-  Activity, Users, ServerCog, Settings2, UserRound, LogOut, Menu, X, ShieldCheck, ChevronRight,
+  Activity, Users, ServerCog, Settings2, UserRound, LogOut, Menu, X, ShieldCheck, ChevronRight, Download,
 } from 'lucide-vue-next'
 import BrandMark from '@/components/BrandMark.vue'
 import { sessionStore } from '@/state/session'
@@ -16,6 +16,7 @@ const adminItems = [
   { to: '/admin/users', label: '用户管理', icon: Users },
   { to: '/admin/pool', label: '账号池', icon: ServerCog },
   { to: '/admin/settings', label: '连接设置', icon: Settings2 },
+  { to: '/admin/update', label: '程序更新', icon: Download },
 ]
 const items = computed(() => sessionStore.isAdmin.value ? adminItems : baseItems)
 const displayName = computed(() => sessionStore.user.value?.display_name || sessionStore.user.value?.username || '用户')

@@ -11,12 +11,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/MengStar-L/sub2api5hlimit/internal/config"
 	"github.com/MengStar-L/sub2api5hlimit/internal/httpapi"
+	"github.com/MengStar-L/sub2api5hlimit/internal/releasecheck"
 	"github.com/MengStar-L/sub2api5hlimit/internal/secure"
 	"github.com/MengStar-L/sub2api5hlimit/internal/store"
 	"github.com/MengStar-L/sub2api5hlimit/internal/syncer"
@@ -84,10 +86,20 @@ func serve() error {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	upstream := syncer.New(data, logger)
+	updates, err := releasecheck.New(data, logger, releasecheck.Config{
+		CurrentVersion: version,
+		DataDir:        filepath.Dir(cfg.DBPath),
+		StatusPath:     cfg.UpdateStatusPath,
+		UpdaterPath:    cfg.UpdaterPath,
+	})
+	if err != nil {
+		return fmt.Errorf("initialize release checker: %w", err)
+	}
 	api, err := httpapi.New(data, upstream, logger, cfg.CookieSecure)
 	if err != nil {
 		return fmt.Errorf("initialize HTTP API: %w", err)
 	}
+	api.SetUpdateManager(updates)
 	api.MountFrontend(webui.Handler())
 
 	listener, err := net.Listen("tcp", cfg.Listen)
@@ -109,6 +121,7 @@ func serve() error {
 	}
 	logger.Info("Sub2API quota center started", "listen", listener.Addr().String(), "version", version)
 	go upstream.Run(ctx)
+	go updates.Run(ctx)
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()

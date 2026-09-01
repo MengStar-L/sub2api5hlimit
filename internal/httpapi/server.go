@@ -26,14 +26,20 @@ const (
 )
 
 type Server struct {
-	store        *store.Store
-	upstream     UpstreamManager
-	log          *slog.Logger
-	cookieSecure bool
-	mux          *http.ServeMux
-	setupToken   string
-	loginMu      sync.Mutex
-	loginFails   map[string][]time.Time
+	store          *store.Store
+	upstream       UpstreamManager
+	log            *slog.Logger
+	cookieSecure   bool
+	mux            *http.ServeMux
+	setupToken     string
+	loginMu        sync.Mutex
+	loginFails     map[string][]time.Time
+	settingsMu     sync.Mutex
+	quotaResetMu   sync.Mutex
+	quotaResetKeys map[int64]struct{}
+	maintenanceMu  sync.Mutex
+	bindingMu      sync.RWMutex
+	updates        UpdateManager
 }
 
 type contextKey string
@@ -41,7 +47,13 @@ type contextKey string
 const sessionKey contextKey = "session"
 
 func New(data *store.Store, upstream UpstreamManager, logger *slog.Logger, cookieSecure bool) (*Server, error) {
-	server := &Server{store: data, upstream: upstream, log: logger, cookieSecure: cookieSecure, mux: http.NewServeMux(), loginFails: make(map[string][]time.Time)}
+	server := &Server{
+		store: data, upstream: upstream, log: logger, cookieSecure: cookieSecure, mux: http.NewServeMux(),
+		loginFails: make(map[string][]time.Time), quotaResetKeys: make(map[int64]struct{}),
+	}
+	if err := data.RecoverInterruptedQuotaResetJobs(context.Background()); err != nil {
+		return nil, err
+	}
 	status, err := data.SetupStatus(context.Background())
 	if err != nil {
 		return nil, err
@@ -60,9 +72,10 @@ func New(data *store.Store, upstream UpstreamManager, logger *slog.Logger, cooki
 	return server, nil
 }
 
-func (s *Server) SetupToken() string                  { return s.setupToken }
-func (s *Server) Handler() http.Handler               { return securityHeaders(s.mux) }
-func (s *Server) MountFrontend(frontend http.Handler) { s.mux.Handle("/", frontend) }
+func (s *Server) SetupToken() string                     { return s.setupToken }
+func (s *Server) Handler() http.Handler                  { return securityHeaders(s.mux) }
+func (s *Server) MountFrontend(frontend http.Handler)    { s.mux.Handle("/", frontend) }
+func (s *Server) SetUpdateManager(manager UpdateManager) { s.updates = manager }
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.health)
@@ -83,12 +96,19 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/admin/users/{id}/password", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.resetPassword)))
 	s.mux.Handle("PUT /api/admin/users/{id}/binding", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.setBinding)))
 	s.mux.Handle("DELETE /api/admin/users/{id}/binding", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.deleteBinding)))
+	s.mux.Handle("POST /api/admin/users/{id}/quota-reset", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.resetUserQuota)))
 	s.mux.Handle("GET /api/admin/upstream-keys", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.upstreamKeys)))
 	s.mux.Handle("GET /api/admin/pool", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.adminPool)))
 	s.mux.Handle("PUT /api/admin/pool", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.publishPool)))
 	s.mux.Handle("GET /api/admin/settings", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.getSettings)))
 	s.mux.Handle("PUT /api/admin/settings", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.putSettings)))
 	s.mux.Handle("POST /api/admin/sync", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.syncNow)))
+	s.mux.Handle("GET /api/admin/update", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.updateStatus)))
+	s.mux.Handle("POST /api/admin/update/check", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.checkUpdate)))
+	s.mux.Handle("POST /api/admin/update/apply", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.applyUpdate)))
+	s.mux.Handle("POST /api/admin/quota-resets", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.createQuotaResetJob)))
+	s.mux.Handle("GET /api/admin/quota-resets/current", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.currentQuotaResetJob)))
+	s.mux.Handle("GET /api/admin/quota-resets/{id}", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.quotaResetJob)))
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, 404, "NOT_FOUND", "API endpoint not found")
 	})

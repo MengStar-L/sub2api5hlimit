@@ -1,0 +1,45 @@
+[Unit]
+Description=Apply a verified Sub2API quota portal update
+Documentation=https://github.com/MengStar-L/sub2api5hlimit
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/sub2api5hlimit/update
+ExecStart=/opt/sub2api5hlimit/bin/sub2api-limit-updater apply
+TimeoutStartSec=10min
+TimeoutStopSec=9min
+KillMode=mixed
+UMask=0027
+
+# The privileged helper has no portal credentials. It may mutate only the
+# installed binaries, the update marker/status, offline SQLite files and backups.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ReadWritePaths=/opt/sub2api5hlimit/bin /opt/sub2api5hlimit/data /opt/sub2api5hlimit/backups /opt/sub2api5hlimit/update
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

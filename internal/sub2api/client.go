@@ -216,6 +216,32 @@ func (c *Client) ListAPIKeys(ctx context.Context, userID int64) ([]APIKey, error
 	})
 }
 
+// ResetAPIKeyRateLimitUsage resets all upstream rate-limit windows (5h, 1d,
+// and 7d) for one API key. Only the safe subset of the response is decoded.
+func (c *Client) ResetAPIKeyRateLimitUsage(ctx context.Context, keyID int64) (APIKeyReset, error) {
+	if keyID <= 0 {
+		return APIKeyReset{}, fmt.Errorf("sub2api API key ID must be positive")
+	}
+	request := struct {
+		Reset bool `json:"reset_rate_limit_usage"`
+	}{Reset: true}
+	var response struct {
+		APIKey *apiKeyResetDTO `json:"api_key"`
+	}
+	endpoint := "/api/v1/admin/api-keys/" + strconv.FormatInt(keyID, 10)
+	if err := c.doJSON(ctx, http.MethodPut, endpoint, nil, request, &response); err != nil {
+		return APIKeyReset{}, err
+	}
+	if response.APIKey == nil || response.APIKey.ID <= 0 || response.APIKey.ID != keyID {
+		return APIKeyReset{}, &SchemaError{Detail: "reset response API key id is invalid"}
+	}
+	return APIKeyReset{
+		ID: response.APIKey.ID, Usage5h: response.APIKey.Usage5h, Usage7d: response.APIKey.Usage7d,
+		Reset5hAt: response.APIKey.Reset5hAt, Reset7dAt: response.APIKey.Reset7dAt,
+		UpdatedAt: response.APIKey.UpdatedAt,
+	}, nil
+}
+
 func (c *Client) ListAccounts(ctx context.Context) ([]Account, error) {
 	return paginate[accountDTO](ctx, c, "/api/v1/admin/accounts", func(raw *accountDTO) (Account, error) {
 		if raw.ID <= 0 {
@@ -476,6 +502,17 @@ type apiKeyDTO struct {
 	Window7dStart *time.Time `json:"window_7d_start"`
 	Reset5hAt     *time.Time `json:"reset_5h_at"`
 	Reset7dAt     *time.Time `json:"reset_7d_at"`
+}
+
+// apiKeyResetDTO intentionally omits key and last_used_ip even though the
+// official admin endpoint includes them in its response.
+type apiKeyResetDTO struct {
+	ID        int64      `json:"id"`
+	Usage5h   float64    `json:"usage_5h"`
+	Usage7d   float64    `json:"usage_7d"`
+	Reset5hAt *time.Time `json:"reset_5h_at"`
+	Reset7dAt *time.Time `json:"reset_7d_at"`
+	UpdatedAt *time.Time `json:"updated_at"`
 }
 
 type accountDTO struct {

@@ -20,11 +20,13 @@ import (
 const settingsAAD = "settings:sub2api-admin-key:v1"
 
 var (
-	ErrNotFound       = errors.New("not found")
-	ErrSetupComplete  = errors.New("setup already complete")
-	ErrInvalidToken   = errors.New("invalid or expired setup token")
-	ErrUsernameExists = errors.New("username already exists")
-	ErrKeyBound       = errors.New("upstream key is already bound")
+	ErrNotFound             = errors.New("not found")
+	ErrSetupComplete        = errors.New("setup already complete")
+	ErrInvalidToken         = errors.New("invalid or expired setup token")
+	ErrUsernameExists       = errors.New("username already exists")
+	ErrKeyBound             = errors.New("upstream key is already bound")
+	ErrQuotaResetJobActive  = errors.New("a quota reset job is already active")
+	ErrQuotaResetTransition = errors.New("invalid quota reset state transition")
 )
 
 //go:embed migrations/*.sql

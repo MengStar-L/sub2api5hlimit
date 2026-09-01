@@ -99,6 +99,81 @@ export interface AdminUser extends SessionUser {
   created_at?: number | string
   updated_at?: number | string
   binding?: AdminBinding | null
+  window_5h?: KeyWindowView | null
+  window_7d?: KeyWindowView | null
+  snapshot?: SnapshotMeta
+  resettable?: boolean
+}
+
+export type QuotaResetItemStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'unknown' | 'skipped'
+
+export interface QuotaResetJobItem {
+  id: number | string
+  job_id: number | string
+  user_id: number | string
+  username: string
+  display_name?: string
+  user_status?: UserStatus | string
+  upstream_key_id?: number | string | null
+  key_mask?: string
+  status: QuotaResetItemStatus
+  error_code?: string
+  created_at?: number | string
+  updated_at?: number | string
+}
+
+export interface QuotaResetJob {
+  id: number | string
+  job_id?: number | string
+  status: 'queued' | 'running' | 'completed' | string
+  total_count: number
+  pending_count: number
+  running_count: number
+  succeeded_count: number
+  failed_count: number
+  unknown_count: number
+  skipped_count: number
+  created_at?: number | string
+  started_at?: number | string
+  completed_at?: number | string
+  items?: QuotaResetJobItem[]
+}
+
+export interface UpdateOperation {
+  operation_id: string
+  target_version: string
+  state: 'queued' | 'running' | 'succeeded' | 'failed' | 'rolled_back' | string
+  phase: string
+  error_code?: string
+  started_at?: number | string
+  updated_at?: number | string
+  finished_at?: number | string
+  rolled_back: boolean
+}
+
+export interface UpdateView {
+  current: { version: string; os?: string; arch?: string }
+  latest?: {
+    version: string
+    release_url: string
+    published_at?: number | string
+    mode: 'binary' | 'manual' | string
+    min_updater_version?: string
+  } | null
+  status: 'development' | 'check_failed' | 'manual_required' | 'update_available' | 'up_to_date' | string
+  checked_at?: number | string
+  last_success_at?: number | string
+  last_error_code?: string
+  update_available: boolean
+  compatible: boolean
+  updater_available: boolean
+  operation?: UpdateOperation | null
+}
+
+export interface UpdateApplyResult {
+  operation_id: string
+  target_version: string
+  state: string
 }
 
 export interface UpstreamKey {

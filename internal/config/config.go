@@ -15,20 +15,26 @@ const (
 	EnvDBPath       = "SUB2API_LIMIT_DB_PATH"
 	EnvMasterKey    = "SUB2API_LIMIT_MASTER_KEY"
 	EnvCookieSecure = "SUB2API_LIMIT_COOKIE_SECURE"
+	EnvUpdateStatus = "SUB2API_LIMIT_UPDATE_STATUS_PATH"
+	EnvUpdaterPath  = "SUB2API_LIMIT_UPDATER_PATH"
 )
 
 type Config struct {
-	Listen       string
-	DBPath       string
-	MasterKey    []byte
-	CookieSecure bool
+	Listen           string
+	DBPath           string
+	MasterKey        []byte
+	CookieSecure     bool
+	UpdateStatusPath string
+	UpdaterPath      string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		Listen:       "0.0.0.0:2556",
-		DBPath:       filepath.Join("data", "app.db"),
-		CookieSecure: false,
+		Listen:           "0.0.0.0:2556",
+		DBPath:           filepath.Join("data", "app.db"),
+		CookieSecure:     false,
+		UpdateStatusPath: "/opt/sub2api5hlimit/update/status.json",
+		UpdaterPath:      "/opt/sub2api5hlimit/bin/sub2api-limit-updater",
 	}
 	if value := strings.TrimSpace(os.Getenv(EnvListen)); value != "" {
 		cfg.Listen = value
@@ -42,6 +48,12 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("%s must be true or false", EnvCookieSecure)
 		}
 		cfg.CookieSecure = parsed
+	}
+	if value := strings.TrimSpace(os.Getenv(EnvUpdateStatus)); value != "" {
+		cfg.UpdateStatusPath = value
+	}
+	if value := strings.TrimSpace(os.Getenv(EnvUpdaterPath)); value != "" {
+		cfg.UpdaterPath = value
 	}
 	rawKey := strings.TrimSpace(os.Getenv(EnvMasterKey))
 	if rawKey == "" {

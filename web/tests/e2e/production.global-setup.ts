@@ -31,6 +31,9 @@ async function readJSON(request: IncomingMessage): Promise<Record<string, unknow
 }
 
 async function startFakeSub2API() {
+	let usage5h = 12.5
+	let usage7d = 75
+	let windowsStarted = true
   const server = http.createServer(async (request, response) => {
     if (request.headers['x-api-key'] !== adminAPIKey) {
       envelope(response, { code: 401, message: 'invalid admin key' }, 401)
@@ -57,12 +60,24 @@ async function startFakeSub2API() {
     if (request.method === 'GET' && url.pathname === '/api/v1/admin/users/7/api-keys') {
       envelope(response, pageData(request, [{
         id: 301, user_id: 7, key: rawDistributionKey, last_used_ip: '203.0.113.99',
-        name: '生产配额 Key', status: 'active', rate_limit_5h: 50, usage_5h: 12.5,
-        reset_5h_at: reset5h, rate_limit_7d: 250, usage_7d: 75, reset_7d_at: reset7d,
+		name: '生产配额 Key', status: 'active', rate_limit_5h: 50, usage_5h: usage5h,
+		reset_5h_at: windowsStarted ? reset5h : null, rate_limit_7d: 250, usage_7d: usage7d, reset_7d_at: windowsStarted ? reset7d : null,
         updated_at: updatedAt,
       }]))
       return
     }
+	if (request.method === 'PUT' && url.pathname === '/api/v1/admin/api-keys/301') {
+		const body = await readJSON(request)
+		if (body.reset_rate_limit_usage !== true) {
+			envelope(response, { code: 400, message: 'reset flag required' }, 400)
+			return
+		}
+		usage5h = 0
+		usage7d = 0
+		windowsStarted = false
+		envelope(response, { api_key: { id: 301, key: rawDistributionKey, last_used_ip: '203.0.113.99', usage_5h: 0, usage_7d: 0, reset_5h_at: null, reset_7d_at: null, updated_at: new Date().toISOString() } })
+		return
+	}
     if (request.method === 'GET' && url.pathname === '/api/v1/admin/accounts') {
       envelope(response, pageData(request, [{
         id: 101, name: 'Production Pool', platform: 'openai', type: 'oauth', status: 'active',

@@ -10,13 +10,48 @@ import (
 	"github.com/MengStar-L/sub2api5hlimit/internal/store"
 )
 
+type adminUserView struct {
+	store.User
+	FiveHour   *keyWindowView `json:"window_5h"`
+	SevenDay   *keyWindowView `json:"window_7d"`
+	Snapshot   snapshotMeta   `json:"snapshot"`
+	Resettable bool           `json:"resettable"`
+}
+
+func userResettable(user store.User) bool {
+	return user.Role == store.RoleUser &&
+		(user.Status == store.StatusActive || user.Status == store.StatusDisabled) &&
+		user.Binding != nil && user.Binding.UpstreamKeyID > 0 && user.Binding.BindingState != "missing"
+}
+
+func newAdminUserView(user store.User, now int64) adminUserView {
+	view := adminUserView{User: user, Resettable: userResettable(user), Snapshot: snapshotMeta{AsOf: now, Stale: true}}
+	if user.Binding == nil {
+		return view
+	}
+	five := windowView(user.Binding.RateLimit5h, user.Binding.Usage5h, user.Binding.Reset5hAt)
+	seven := windowView(user.Binding.RateLimit7d, user.Binding.Usage7d, user.Binding.Reset7dAt)
+	view.FiveHour = &five
+	view.SevenDay = &seven
+	view.Snapshot = snapshotMeta{
+		AsOf: now, SourceUpdatedAt: user.Binding.SourceUpdatedAt, LastSuccessAt: user.Binding.LastSuccessAt,
+		Stale: user.Binding.LastErrorCode != "" || user.Binding.LastSuccessAt == nil || now-*user.Binding.LastSuccessAt > 45,
+	}
+	return view
+}
+
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := s.store.ListUsers(r.Context())
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	writeData(w, 200, users)
+	now := time.Now().Unix()
+	views := make([]adminUserView, 0, len(users))
+	for _, user := range users {
+		views = append(views, newAdminUserView(user, now))
+	}
+	writeData(w, 200, views)
 }
 
 func (s *Server) findKey(id int64) (store.KeySnapshot, bool) {
@@ -48,6 +83,8 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "INVALID_PASSWORD", err.Error())
 		return
 	}
+	s.bindingMu.Lock()
+	defer s.bindingMu.Unlock()
 	snapshot, ok := s.findKey(request.UpstreamKeyID)
 	if !ok || !snapshot.Compliant() {
 		writeError(w, 400, "INVALID_UPSTREAM_KEY", "请选择同时配置 5h 与 7d 正数限额的可用 Key")
@@ -99,6 +136,8 @@ func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	s.bindingMu.Lock()
+	defer s.bindingMu.Unlock()
 	if err := s.store.DeleteUser(r.Context(), id, currentSession(r).User.ID); err != nil {
 		writeStoreError(w, err)
 		return
@@ -140,6 +179,8 @@ func (s *Server) setBinding(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request) {
 		return
 	}
+	s.bindingMu.Lock()
+	defer s.bindingMu.Unlock()
 	snapshot, found := s.findKey(request.UpstreamKeyID)
 	if !found || !snapshot.Compliant() {
 		writeError(w, 400, "INVALID_UPSTREAM_KEY", "请选择同时配置 5h 与 7d 正数限额的可用 Key")
@@ -158,6 +199,8 @@ func (s *Server) deleteBinding(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	s.bindingMu.Lock()
+	defer s.bindingMu.Unlock()
 	if err := s.store.DeleteBinding(r.Context(), id, currentSession(r).User.ID); err != nil {
 		writeStoreError(w, err)
 		return

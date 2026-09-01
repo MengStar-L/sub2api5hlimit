@@ -15,6 +15,12 @@ async function fulfill(route: Route, data: unknown, status = 200) {
 }
 
 async function fakeAPI(page: Page, role: 'user' | 'admin', setupComplete = true) {
+	let batchCreated = false
+	let updateRequested = false
+	let updatePolls = 0
+	const quotaJob = { id: 9, status: 'completed', total_count: 1, pending_count: 0, running_count: 0, succeeded_count: 1, failed_count: 0, unknown_count: 0, skipped_count: 0, items: [{ id: 91, job_id: 9, user_id: 2, username: 'alice', display_name: '林晓', status: 'succeeded' }] }
+	const adminUser = { ...user, created_at: new Date(now - 86400000).toISOString(), resettable: true, binding: { upstream_key_id: 41, key_name: '团队主 Key', masked_key: 'sk-…7f9a', binding_state: 'healthy' }, window_5h: { limit_usd: 50, used_usd: 12.4, remaining_usd: 37.6, percent: 24.8, reset_at: isoAfter(4.7) }, window_7d: { limit_usd: 240, used_usd: 88, remaining_usd: 152, percent: 36.7, reset_at: isoAfter(93) }, snapshot: { stale: false, as_of: new Date().toISOString() } }
+	const update = { current: { version: 'v0.2.0', os: 'linux', arch: 'amd64' }, latest: { version: 'v0.2.1', release_url: 'https://github.com/MengStar-L/sub2api5hlimit/releases/tag/v0.2.1', mode: 'binary', min_updater_version: 'v0.2.0' }, status: 'update_available', update_available: true, compatible: true, updater_available: true }
   await page.route('**/api/**', async route => {
     const request = route.request()
     const path = new URL(request.url()).pathname
@@ -25,14 +31,33 @@ async function fakeAPI(page: Page, role: 'user' | 'admin', setupComplete = true)
     if (path === '/api/auth/login') return fulfill(route, { user: role === 'admin' ? admin : user, csrf_token: 'csrf-test-token' })
     if (path === '/api/auth/logout' || path === '/api/auth/password') return fulfill(route, {})
     if (path === '/api/me/dashboard') return fulfill(route, { user: role === 'admin' ? admin : user, key: { id: 41, name: '团队主 Key', masked_key: 'sk-…7f9a', status: 'healthy', window_5h: { limit_usd: 50, used_usd: 12.4, remaining_usd: 37.6, percent: 24.8, reset_at: isoAfter(4.7) }, window_7d: { limit_usd: 240, used_usd: 88, remaining_usd: 152, percent: 36.7, reset_at: isoAfter(93) }, snapshot: { stale: false, as_of: new Date().toISOString(), source_updated_at: new Date(now - 60_000).toISOString() } }, pool, snapshot: { stale: false, as_of: new Date().toISOString() } })
-    if (path === '/api/admin/users' && method === 'GET') return fulfill(route, { users: [admin, { ...user, created_at: new Date(now - 86400000).toISOString(), binding: { upstream_key_id: 41, key_name: '团队主 Key', masked_key: 'sk-…7f9a', status: 'healthy' } }] })
+	if (path === '/api/admin/users' && method === 'GET') return fulfill(route, { users: [adminUser] })
     if (path === '/api/admin/users' && method === 'POST') return fulfill(route, { ...user, id: 3 })
+	if (path === '/api/admin/users/2/quota-reset' && method === 'POST') return fulfill(route, { user_id: 2, upstream_key_id: 41, status: 'succeeded', snapshot_updated: true })
     if (path.startsWith('/api/admin/users/')) return fulfill(route, {})
+	if (path === '/api/admin/quota-resets' && method === 'POST') { batchCreated = true; return fulfill(route, { ...quotaJob, status: 'queued', pending_count: 1, succeeded_count: 0, items: undefined }) }
+	if (path === '/api/admin/quota-resets/current') return batchCreated ? fulfill(route, { ...quotaJob, items: undefined }) : fulfill(route, { code: 'NOT_FOUND', message: '暂无批量任务' }, 404)
+	if (path === '/api/admin/quota-resets/9') return fulfill(route, quotaJob)
     if (path === '/api/admin/upstream-keys') return fulfill(route, { keys: [{ id: 41, name: '团队主 Key', masked_key: 'sk-…7f9a', rate_limit_5h: 50, rate_limit_7d: 240, bound_user_id: 2, bound_username: 'alice', eligible: true }, { id: 42, name: '新用户 Key', masked_key: 'sk-…3cd1', rate_limit_5h: 30, rate_limit_7d: 150, eligible: true }] })
     if (path === '/api/admin/pool' && method === 'GET') return fulfill(route, { accounts: pool })
     if (path === '/api/admin/pool' && method === 'PUT') return fulfill(route, {})
     if (path === '/api/admin/settings' && method === 'GET') return fulfill(route, { base_url: 'https://sub2api.example.com', owner_user_id: 9, owner_username: 'key-owner', upstream_version: '0.1.183', last_success_at: new Date(now - 20_000).toISOString(), key_last_success_at: new Date(now - 20_000).toISOString(), account_last_success_at: new Date(now - 120_000).toISOString(), usage_last_success_at: new Date(now - 50_000).toISOString() })
     if (path === '/api/admin/settings' || path === '/api/admin/sync') return fulfill(route, {})
+	if (path === '/api/admin/update' && method === 'GET') {
+		if (updateRequested) {
+			updatePolls++
+			if (updatePolls === 1) return route.abort('connectionfailed')
+			return fulfill(route, {
+				...update,
+				current: { ...update.current, version: 'v0.2.1' },
+				status: 'up_to_date', update_available: false,
+				operation: { operation_id: 'operation-e2e', target_version: 'v0.2.1', state: 'succeeded', phase: 'completed', rolled_back: false },
+			})
+		}
+		return fulfill(route, update)
+	}
+	if (path === '/api/admin/update/check' && method === 'POST') return fulfill(route, update)
+	if (path === '/api/admin/update/apply' && method === 'POST') { updateRequested = true; return fulfill(route, { operation_id: 'operation-e2e', target_version: 'v0.2.1', state: 'queued' }) }
     return fulfill(route, { code: 'not_found', message: `Unhandled ${method} ${path}` }, 404)
   })
 }
@@ -55,6 +80,8 @@ test('admin can open the atomic user and key form', async ({ page }) => {
   await fakeAPI(page, 'admin')
   await page.goto('/admin/users')
   await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible()
+	await expect(page.getByText('$12.40')).toBeVisible()
+	await expect(page.getByText('$88.00')).toBeVisible()
   await page.getByRole('button', { name: '添加用户' }).click()
   await expect(page.getByRole('dialog', { name: '添加用户' })).toBeVisible()
   await page.getByLabel('用户名').fill('new-user')
@@ -62,6 +89,72 @@ test('admin can open the atomic user and key form', async ({ page }) => {
   await page.getByLabel('密码', { exact: true }).fill('strong-password-2026')
   await page.getByLabel('上游 Key').selectOption('42')
   await expect(page.getByRole('button', { name: '保存用户' })).toBeEnabled()
+})
+
+test('admin history preserves disabled status and explains skipped resets', async ({ page }) => {
+	await fakeAPI(page, 'admin')
+	await page.route('**/api/admin/users', async route => {
+		if (route.request().method() !== 'GET') return route.fallback()
+		return fulfill(route, {
+			users: [{
+				...user,
+				status: 'disabled',
+				created_at: new Date(now - 86_400_000).toISOString(),
+				resettable: true,
+				binding: { upstream_key_id: 41, key_name: '团队主 Key', masked_key: 'sk-…7f9a', binding_state: 'healthy' },
+			}],
+		})
+	})
+	await page.route('**/api/admin/quota-resets/current', route => fulfill(route, {
+		id: 10,
+		status: 'completed',
+		total_count: 1,
+		pending_count: 0,
+		running_count: 0,
+		succeeded_count: 0,
+		failed_count: 0,
+		unknown_count: 0,
+		skipped_count: 1,
+		items: [{ id: 101, job_id: 10, user_id: 2, username: 'alice', display_name: '林晓', status: 'skipped', error_code: 'BINDING_CHANGED' }],
+	}))
+
+	await page.goto('/admin/users')
+	await expect(page.locator('.user-status .status-pill')).toHaveText(/已停用/)
+	await expect(page.getByText('批量重置已完成', { exact: true })).toHaveCount(0)
+	await page.getByRole('button', { name: '展开明细' }).click()
+	await expect(page.getByText(/执行前 Key 已换绑（BINDING_CHANGED）/)).toBeVisible()
+})
+
+test('admin can reset one user, start a batch, and request the checked update', async ({ page }, testInfo) => {
+	await fakeAPI(page, 'admin')
+	page.on('dialog', dialog => dialog.accept())
+	await page.goto('/admin/users')
+	await page.screenshot({ path: `output/playwright/admin-users-${testInfo.project.name}.png`, fullPage: true })
+
+	const singleRequest = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/api/admin/users/2/quota-reset'))
+	await page.getByTitle('重置 5h、1d、7d 额度').click()
+	await singleRequest
+	await expect(page.getByText('额度已重置')).toBeVisible()
+
+	const batchRequest = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/api/admin/quota-resets'))
+	await page.getByRole('button', { name: '重置全部额度' }).click()
+	const request = await batchRequest
+	expect(request.postDataJSON()).toEqual({ scope: 'all_non_deleted' })
+	await expect(page.getByText('最近一次批量重置')).toBeVisible()
+
+	await page.goto('/admin/update')
+	await expect(page.locator('.update-overview article').filter({ hasText: '当前版本' }).getByText('v0.2.0', { exact: true })).toBeVisible()
+	await expect(page.locator('.update-overview article').filter({ hasText: '最新稳定版' }).getByText('v0.2.1', { exact: true })).toBeVisible()
+	const applyRequest = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/api/admin/update/apply'))
+	await page.getByRole('button', { name: '安装 v0.2.1' }).click()
+	expect((await applyRequest).postDataJSON()).toEqual({ target_version: 'v0.2.1' })
+	await expect(page.getByText('更新请求已提交')).toBeVisible()
+	await expect(page.getByRole('heading', { name: '正在等待服务恢复' })).toBeVisible({ timeout: 5_000 })
+	await expect(page.getByText('已安装 v0.2.1。')).toBeVisible({ timeout: 7_000 })
+	await expect(page.getByRole('button', { name: '安装 v0.2.1' })).toHaveCount(0)
+	const overflow = await page.locator('html').evaluate(element => element.scrollWidth > element.clientWidth)
+	expect(overflow).toBe(false)
+	await page.screenshot({ path: `output/playwright/admin-update-${testInfo.project.name}.png`, fullPage: true })
 })
 
 test('admin dashboard requests are redirected to user administration', async ({ page }) => {

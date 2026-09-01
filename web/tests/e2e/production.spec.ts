@@ -100,3 +100,21 @@ test('real Go binary user dashboard remains overflow-free at a mobile viewport',
   await page.waitForTimeout(900)
   await page.screenshot({ path: testInfo.outputPath('production-dashboard-mobile.png'), fullPage: true })
 })
+
+test('real Go binary resets both windows in the 390px admin layout without overflow', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto(`${runtime('PRODUCTION_PORTAL_URL')}/login`)
+	await page.getByLabel('用户名').fill(adminUsername)
+	await page.locator('input[name="password"]').fill(adminPassword)
+	await page.getByRole('button', { name: '登录配额中心' }).click()
+	await expect(page).toHaveURL(/\/admin\/users$/)
+	await expect(page.getByText('$12.50')).toBeVisible()
+	await expect(page.getByText('$75.00')).toBeVisible()
+	page.once('dialog', dialog => dialog.accept())
+	const resetResponse = page.waitForResponse(response => response.url().includes('/quota-reset') && response.status() === 200)
+	await page.getByTitle('重置 5h、1d、7d 额度').click()
+	await resetResponse
+	await expect(page.getByText('$0.00')).toHaveCount(2)
+	await expect(page.getByText('尚未启动')).toHaveCount(2)
+	await expectNoHorizontalOverflow(page)
+})

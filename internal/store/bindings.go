@@ -177,3 +177,24 @@ func (s *Store) MarkKeySyncFailed(ctx context.Context, code string) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE key_bindings SET last_error_code=?, updated_at=?`, code, nowUnix())
 	return err
 }
+
+// ApplyQuotaResetSnapshot stores only the safe usage fields returned by the
+// official reset endpoint. Identity, limits, status and the masked key remain
+// anchored to the existing binding until the next complete key-list sync.
+func (s *Store) ApplyQuotaResetSnapshot(ctx context.Context, keyID int64, usage5h, usage7d float64, reset5h, reset7d, sourceUpdatedAt *int64, appliedAt int64) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE key_bindings SET
+      usage_5h=?, reset_5h_at=?, usage_7d=?, reset_7d_at=?, source_updated_at=?,
+      last_success_at=?, last_error_code='', updated_at=? WHERE upstream_key_id=?`,
+		usage5h, nullInt(reset5h), usage7d, nullInt(reset7d), nullInt(sourceUpdatedAt), appliedAt, appliedAt, keyID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

@@ -84,7 +84,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 			UpstreamStatus: binding.UpstreamStatus, FiveHour: windowView(binding.RateLimit5h, binding.Usage5h, binding.Reset5hAt),
 			SevenDay: windowView(binding.RateLimit7d, binding.Usage7d, binding.Reset7dAt),
 			Snapshot: snapshotMeta{AsOf: now, SourceUpdatedAt: binding.SourceUpdatedAt, LastSuccessAt: binding.LastSuccessAt,
-				Stale: binding.LastSuccessAt == nil || now-*binding.LastSuccessAt > 45}}
+				Stale: binding.LastErrorCode != "" || binding.LastSuccessAt == nil || now-*binding.LastSuccessAt > 45}}
 	}
 	accounts := make([]publicPoolView, 0, len(pool))
 	for _, account := range pool {

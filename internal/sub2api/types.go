@@ -67,6 +67,18 @@ type APIKey struct {
 	SourceUpdatedAt *time.Time `json:"source_updated_at,omitempty"`
 }
 
+// APIKeyReset is the allowlisted result of an upstream rate-limit reset. The
+// upstream response also contains the raw key and last-used IP, neither of
+// which can be represented by this type.
+type APIKeyReset struct {
+	ID        int64      `json:"id"`
+	Usage5h   float64    `json:"usage_5h"`
+	Usage7d   float64    `json:"usage_7d"`
+	Reset5hAt *time.Time `json:"reset_5h_at"`
+	Reset7dAt *time.Time `json:"reset_7d_at"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
 // HasRequiredLimits reports whether both portal-required windows are enabled.
 func (k APIKey) HasRequiredLimits() bool {
 	return k.RateLimit5h > 0 && k.RateLimit7d > 0

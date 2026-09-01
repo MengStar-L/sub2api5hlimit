@@ -195,6 +195,74 @@ func TestListAPIKeysPaginatesAndSanitizes(t *testing.T) {
 	}
 }
 
+func TestResetAPIKeyRateLimitUsageUsesAdminEndpointAndNarrowResult(t *testing.T) {
+	t.Parallel()
+
+	rawKey := "sk-reset-response-sentinel-abcd"
+	lastIP := "203.0.113.88"
+	updatedAt := "2026-08-31T11:00:00Z"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/admin/api-keys/42" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("x-api-key"); got != testAdminKey {
+			t.Errorf("x-api-key = %q", got)
+		}
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		if !reflect.DeepEqual(request, map[string]any{"reset_rate_limit_usage": true}) {
+			t.Errorf("request body = %#v", request)
+		}
+		writeEnvelope(t, w, map[string]any{
+			"api_key": map[string]any{
+				"id": 42, "key": rawKey, "last_used_ip": lastIP,
+				"usage_5h": 0, "usage_7d": 0,
+				"reset_5h_at": nil, "reset_7d_at": nil, "updated_at": updatedAt,
+			},
+			"auto_granted_group_access": false,
+		})
+	}))
+	defer server.Close()
+
+	result, err := testClient(t, server.URL, Config{}).ResetAPIKeyRateLimitUsage(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("ResetAPIKeyRateLimitUsage() error = %v", err)
+	}
+	if result.ID != 42 || result.Usage5h != 0 || result.Usage7d != 0 || result.UpdatedAt == nil {
+		t.Fatalf("result = %#v", result)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sentinel := range []string{rawKey, lastIP} {
+		if strings.Contains(string(encoded), sentinel) {
+			t.Fatalf("safe reset output leaked %q: %s", sentinel, encoded)
+		}
+	}
+}
+
+func TestResetAPIKeyRateLimitUsageValidatesIDAndResponse(t *testing.T) {
+	t.Parallel()
+
+	client := testClient(t, "http://127.0.0.1:1", Config{})
+	if _, err := client.ResetAPIKeyRateLimitUsage(context.Background(), 0); err == nil {
+		t.Fatal("ResetAPIKeyRateLimitUsage() accepted a non-positive ID")
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeEnvelope(t, w, map[string]any{"api_key": map[string]any{"id": 41}})
+	}))
+	defer server.Close()
+	_, err := testClient(t, server.URL, Config{}).ResetAPIKeyRateLimitUsage(context.Background(), 42)
+	var schemaError *SchemaError
+	if !errors.As(err, &schemaError) {
+		t.Fatalf("error = %v, want SchemaError", err)
+	}
+}
+
 func TestListAccountsPaginatesAndAllowlistsFields(t *testing.T) {
 	t.Parallel()
 

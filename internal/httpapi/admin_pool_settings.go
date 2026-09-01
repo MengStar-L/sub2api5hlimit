@@ -145,6 +145,8 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "MODE_ACK_REQUIRED", "必须确认 Sub2API 未使用 simple 模式")
 		return
 	}
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
 	current, err := s.store.GetSettings(r.Context())
 	if err != nil {
 		writeStoreError(w, err)
@@ -192,21 +194,30 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		next.ConnectionUUID = connectionID
 	}
-	if err := s.store.UpdateSettings(r.Context(), next, replaceKey, rotate); err != nil {
-		if strings.Contains(err.Error(), "unbind all users") {
+	var updateErr error
+	if rotate {
+		func() {
+			s.bindingMu.Lock()
+			defer s.bindingMu.Unlock()
+			releaseRotation := s.upstream.BeginConnectionRotation()
+			defer releaseRotation()
+			updateErr = s.store.UpdateSettings(r.Context(), next, replaceKey, true)
+		}()
+	} else {
+		updateErr = s.store.UpdateSettings(r.Context(), next, replaceKey, false)
+	}
+	if updateErr != nil {
+		if strings.Contains(updateErr.Error(), "unbind all users") {
 			writeError(w, http.StatusConflict, "UPSTREAM_IN_USE", "更换 Base URL 或所有者前，请先解绑全部用户并取消所有账号发布")
 			return
 		}
-		writeStoreError(w, err)
+		writeStoreError(w, updateErr)
 		return
 	}
 	updated, err := s.store.GetSettings(r.Context())
 	if err != nil {
 		writeStoreError(w, err)
 		return
-	}
-	if rotate {
-		s.upstream.ClearSnapshots()
 	}
 	s.runSync("all")
 	writeData(w, http.StatusOK, publicSettings(updated))

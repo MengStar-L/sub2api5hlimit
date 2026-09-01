@@ -5,6 +5,7 @@ import SetupView from '@/views/SetupView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import AdminUsersView from '@/views/AdminUsersView.vue'
 import AdminPoolView from '@/views/AdminPoolView.vue'
+import AdminUpdateView from '@/views/AdminUpdateView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import ProfileView from '@/views/ProfileView.vue'
 
@@ -27,6 +28,7 @@ export const router = createRouter({
     { path: '/admin/users', name: 'users', component: AdminUsersView, meta: { requiresAuth: true, admin: true, title: '用户管理' } },
     { path: '/admin/pool', name: 'pool', component: AdminPoolView, meta: { requiresAuth: true, admin: true, title: '账号池' } },
     { path: '/admin/settings', name: 'settings', component: SettingsView, meta: { requiresAuth: true, admin: true, title: '连接设置' } },
+    { path: '/admin/update', name: 'update', component: AdminUpdateView, meta: { requiresAuth: true, admin: true, title: '程序更新' } },
     { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
   ],
   scrollBehavior: () => ({ top: 0 }),
