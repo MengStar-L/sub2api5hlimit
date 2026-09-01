@@ -110,9 +110,11 @@ test('real Go binary resets both windows in the 390px admin layout without overf
 	await expect(page).toHaveURL(/\/admin\/users$/)
 	await expect(page.getByText('$12.50')).toBeVisible()
 	await expect(page.getByText('$75.00')).toBeVisible()
-	page.once('dialog', dialog => dialog.accept())
 	const resetResponse = page.waitForResponse(response => response.url().includes('/quota-reset') && response.status() === 200)
 	await page.getByTitle('重置 5h、1d、7d 额度').click()
+	const confirmReset = page.getByRole('dialog', { name: '重置该用户额度' })
+	await expect(confirmReset).toBeVisible()
+	await confirmReset.getByRole('button', { name: '重置额度' }).click()
 	await resetResponse
 	await expect(page.getByText('$0.00')).toHaveCount(2)
 	await expect(page.getByText('尚未启动')).toHaveCount(2)

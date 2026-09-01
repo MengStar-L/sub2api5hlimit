@@ -156,11 +156,17 @@ test('admin can reset one user, start a batch, and request the checked update', 
 
 	const singleRequest = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/api/admin/users/2/quota-reset'))
 	await page.getByTitle('重置 5h、1d、7d 额度').click()
+	const singleConfirm = page.getByRole('dialog', { name: '重置该用户额度' })
+	await expect(singleConfirm).toBeVisible()
+	await singleConfirm.getByRole('button', { name: '重置额度' }).click()
 	await singleRequest
 	await expect(page.getByText('额度已重置')).toBeVisible()
 
 	const batchRequest = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/api/admin/quota-resets'))
 	await page.getByRole('button', { name: '重置全部额度' }).click()
+	const batchConfirm = page.getByRole('dialog', { name: '重置全部用户额度' })
+	await expect(batchConfirm).toBeVisible()
+	await batchConfirm.getByRole('button', { name: '重置全部额度' }).click()
 	const request = await batchRequest
 	expect(request.postDataJSON()).toEqual({ scope: 'all_non_deleted' })
 	await expect(page.getByText('最近一次批量重置')).toBeVisible()
