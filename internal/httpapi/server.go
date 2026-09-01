@@ -103,6 +103,7 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/admin/users/{id}/binding", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.setBinding)))
 	s.mux.Handle("DELETE /api/admin/users/{id}/binding", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.deleteBinding)))
 	s.mux.Handle("POST /api/admin/users/{id}/quota-reset", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.resetUserQuota)))
+	s.mux.Handle("PUT /api/admin/users/{id}/limits", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.setUserKeyLimits)))
 	s.mux.Handle("GET /api/admin/upstream-keys", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.upstreamKeys)))
 	s.mux.Handle("GET /api/admin/pool", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.adminPool)))
 	s.mux.Handle("PUT /api/admin/pool", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.publishPool)))

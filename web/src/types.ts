@@ -93,6 +93,10 @@ export interface AdminBinding {
   masked_key?: string
   status?: BindingStatus
   binding_state?: BindingStatus
+  rate_limit_5h?: number
+  rate_limit_7d?: number
+  usage_5h?: number
+  usage_7d?: number
 }
 
 export interface AdminUser extends SessionUser {

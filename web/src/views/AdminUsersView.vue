@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { UserPlus, Search, MoreHorizontal, KeyRound, UserX, UserCheck, RefreshCw, Trash2, Save, Unlink, Users, ShieldCheck, RotateCcw, ChevronDown, CircleAlert } from 'lucide-vue-next'
+import { UserPlus, Search, MoreHorizontal, KeyRound, UserX, UserCheck, RefreshCw, Trash2, Save, Unlink, Users, ShieldCheck, RotateCcw, ChevronDown, CircleAlert, Gauge } from 'lucide-vue-next'
 import AppShell from '@/layouts/AppShell.vue'
 import SideDrawer from '@/components/SideDrawer.vue'
+import ModalDialog from '@/components/ModalDialog.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import CompactQuotaCell from '@/components/CompactQuotaCell.vue'
@@ -23,6 +24,12 @@ const saving = ref(false)
 const formError = ref('')
 const originalKeyId = ref<string>('')
 const resettingUserID = ref<string>('')
+const limitsModalOpen = ref(false)
+const limitsForm = reactive({ userId: '' as string | number, displayName: '', limit5h: 0, limit7d: 0 })
+const savingLimits = ref(false)
+const limitsError = ref('')
+const confirmDialog = reactive({ open: false, title: '', description: '', points: [] as string[], confirmLabel: '确认' })
+let confirmAction: (() => Promise<void>) | null = null
 const batchJob = ref<QuotaResetJob | null>(null)
 const jobDetailsOpen = ref(false)
 let jobPoll: ReturnType<typeof setTimeout> | undefined
@@ -125,16 +132,76 @@ async function removeUser(user: AdminUser) {
   catch (cause) { toast.error('删除失败', cause instanceof ApiError ? cause.message : undefined) }
 }
 
-async function resetQuota(user: AdminUser) {
+function askConfirm(options: { title: string; description: string; points?: string[]; confirmLabel: string }, action: () => Promise<void>) {
+  confirmDialog.title = options.title
+  confirmDialog.description = options.description
+  confirmDialog.points = options.points || []
+  confirmDialog.confirmLabel = options.confirmLabel
+  confirmAction = action
+  confirmDialog.open = true
+}
+
+function closeConfirm() {
+  confirmDialog.open = false
+  confirmAction = null
+}
+
+async function runConfirm() {
+  const action = confirmAction
+  closeConfirm()
+  if (action) await action()
+}
+
+function resetQuota(user: AdminUser) {
   if (batchActive.value || !user.resettable) return
-  if (!window.confirm(`确认重置“${user.display_name || user.username}”的额度？这会恢复完整额度，并同时清除上游隐藏的 1d 窗口及 5h、7d 用量。`)) return
-  resettingUserID.value = String(user.id)
+  askConfirm({
+    title: '重置该用户额度',
+    description: `即将重置「${user.display_name || user.username}」（@${user.username}）绑定的上游 Key 额度。`,
+    points: ['5h、7d 用量将清零，恢复完整可用额度', '上游隐藏的 1d 窗口同时被清除', '该操作无法撤销，且会写入审计日志'],
+    confirmLabel: '重置额度',
+  }, async () => {
+    resettingUserID.value = String(user.id)
+    try {
+      const result = await api.resetUserQuota(user.id)
+      toast.success('额度已重置', result.snapshot_updated === false ? '重置已完成，额度快照正在刷新。' : '5h、1d、7d 窗口已重置。')
+      await load()
+    } catch (cause) { toast.error('额度重置失败', cause instanceof ApiError ? cause.message : undefined) }
+    finally { resettingUserID.value = '' }
+  })
+}
+
+function openLimitsModal(user: AdminUser) {
+  if (!user.binding) return
+  limitsForm.userId = user.id
+  limitsForm.displayName = user.display_name || user.username
+  limitsForm.limit5h = user.binding.rate_limit_5h ?? 0
+  limitsForm.limit7d = user.binding.rate_limit_7d ?? 0
+  limitsError.value = ''
+  limitsModalOpen.value = true
+}
+
+async function saveLimits() {
+  limitsError.value = ''
+  if (limitsForm.limit5h <= 0 || limitsForm.limit7d <= 0) {
+    limitsError.value = '5h 与 7d 限额必须大于 0'
+    return
+  }
+  if (limitsForm.limit5h > 1_000_000 || limitsForm.limit7d > 1_000_000) {
+    limitsError.value = '限额不能超过 $1,000,000'
+    return
+  }
+  savingLimits.value = true
   try {
-    const result = await api.resetUserQuota(user.id)
-    toast.success('额度已重置', result.snapshot_updated === false ? '重置已完成，额度快照正在刷新。' : '5h、1d、7d 窗口已重置。')
+    const result = await api.setUserLimits(limitsForm.userId, limitsForm.limit5h, limitsForm.limit7d)
+    limitsModalOpen.value = false
+    const message = result.warning_code === 'SNAPSHOT_REFRESH_FAILED'
+      ? '限额已修改，额度快照正在刷新。'
+      : '5h 与 7d 限额已更新。'
+    toast.success('限额已修改', message)
     await load()
-  } catch (cause) { toast.error('额度重置失败', cause instanceof ApiError ? cause.message : undefined) }
-  finally { resettingUserID.value = '' }
+  } catch (cause) {
+    limitsError.value = cause instanceof ApiError ? cause.message : '网络请求失败'
+  } finally { savingLimits.value = false }
 }
 
 function stopJobPolling() {
@@ -192,16 +259,23 @@ async function loadCurrentJob() {
   }
 }
 
-async function resetAllQuota() {
-	if (batchActive.value || resettingUserID.value) return
-  if (!window.confirm('确认重置全部未删除用户的额度？这会恢复完整额度，并同时清除每个上游 Key 隐藏的 1d 窗口以及 5h、7d 用量。执行期间无法进行其他额度重置。')) return
-  try {
-    const job = await api.createQuotaReset()
-    batchJob.value = job
-    jobDetailsOpen.value = false
-    toast.info('批量重置已开始', `将依次处理 ${job.total_count} 位用户。`)
-    startJobPolling(job.id)
-  } catch (cause) { toast.error('无法开始批量重置', cause instanceof ApiError ? cause.message : undefined) }
+function resetAllQuota() {
+  if (batchActive.value || resettingUserID.value) return
+  const targets = users.value.filter(user => user.resettable).length
+  askConfirm({
+    title: '重置全部用户额度',
+    description: `即将为所有未删除用户批量重置额度，当前可重置 ${targets} 位用户。`,
+    points: ['每位用户的 5h、7d 用量将清零，恢复完整可用额度', '每个上游 Key 隐藏的 1d 窗口同时被清除', '执行期间无法进行其他额度重置或限额修改', '该操作无法撤销，且会写入审计日志'],
+    confirmLabel: '重置全部额度',
+  }, async () => {
+    try {
+      const job = await api.createQuotaReset()
+      batchJob.value = job
+      jobDetailsOpen.value = false
+      toast.info('批量重置已开始', `将依次处理 ${job.total_count} 位用户。`)
+      startJobPolling(job.id)
+    } catch (cause) { toast.error('无法开始批量重置', cause instanceof ApiError ? cause.message : undefined) }
+  })
 }
 
 onMounted(() => { void load(); void loadCurrentJob() })
@@ -248,7 +322,7 @@ onBeforeUnmount(stopJobPolling)
               <td data-label="5h"><CompactQuotaCell label="5h" :window="user.window_5h" :stale="user.snapshot?.stale" :binding-status="user.binding?.binding_state || user.binding?.status" /></td>
               <td data-label="7d"><CompactQuotaCell label="7d" :window="user.window_7d" :stale="user.snapshot?.stale" :binding-status="user.binding?.binding_state || user.binding?.status" /></td>
               <td data-label="状态"><div class="user-status"><StatusPill :status="userDisplayStatus(user)" :stale="user.status === 'active' && user.snapshot?.stale" /><small v-if="user.binding?.binding_state && user.binding.binding_state !== 'healthy'">{{ user.binding.binding_state === 'missing' ? '上游 Key 不存在' : user.binding.binding_state === 'invalid_limits' ? 'Key 限额异常' : '' }}</small></div></td>
-              <td data-label="操作" class="row-actions"><template v-if="user.role !== 'admin' && user.status !== 'deleted'"><button class="icon-button subtle" type="button" title="重置 5h、1d、7d 额度" :disabled="batchActive || !user.resettable || resettingUserID === String(user.id)" @click="resetQuota(user)"><span v-if="resettingUserID === String(user.id)" class="spinner dark"></span><RotateCcw v-else :size="16" /></button><button class="icon-button subtle" type="button" :title="user.status === 'active' ? '停用用户' : '启用用户'" @click="toggleStatus(user)"><UserX v-if="user.status === 'active'" :size="16" /><UserCheck v-else :size="16" /></button><button class="icon-button subtle" type="button" title="编辑用户" @click="openEdit(user)"><MoreHorizontal :size="18" /></button><button class="icon-button subtle danger" type="button" title="软删除用户" @click="removeUser(user)"><Trash2 :size="16" /></button></template></td>
+              <td data-label="操作" class="row-actions"><template v-if="user.role !== 'admin' && user.status !== 'deleted'"><button class="icon-button subtle" type="button" title="修改 5h / 7d 限额" :disabled="batchActive || !user.binding" @click="openLimitsModal(user)"><Gauge :size="16" /></button><button class="icon-button subtle" type="button" title="重置 5h、1d、7d 额度" :disabled="batchActive || !user.resettable || resettingUserID === String(user.id)" @click="resetQuota(user)"><span v-if="resettingUserID === String(user.id)" class="spinner dark"></span><RotateCcw v-else :size="16" /></button><button class="icon-button subtle" type="button" :title="user.status === 'active' ? '停用用户' : '启用用户'" @click="toggleStatus(user)"><UserX v-if="user.status === 'active'" :size="16" /><UserCheck v-else :size="16" /></button><button class="icon-button subtle" type="button" title="编辑用户" @click="openEdit(user)"><MoreHorizontal :size="18" /></button><button class="icon-button subtle danger" type="button" title="软删除用户" @click="removeUser(user)"><Trash2 :size="16" /></button></template></td>
             </tr>
           </TransitionGroup>
         </table>
@@ -265,5 +339,27 @@ onBeforeUnmount(stopJobPolling)
       </form>
       <template #footer><button class="secondary-button" type="button" @click="drawerOpen = false">取消</button><button class="primary-button" type="submit" form="user-form" :disabled="saving"><span v-if="saving" class="spinner"></span><Save v-else :size="17" />{{ saving ? '正在保存' : '保存用户' }}</button></template>
     </SideDrawer>
+
+    <ModalDialog :open="limitsModalOpen" title="修改限额" :description="`调整 ${limitsForm.displayName} 绑定的上游 Key 的 5h 与 7d 限额。新限额立即生效，已用额度不变。`" @close="limitsModalOpen = false">
+      <form id="limits-form" class="drawer-form" @submit.prevent="saveLimits">
+        <div v-if="limitsError" class="form-alert" role="alert">{{ limitsError }}</div>
+        <label class="field"><span>5 小时限额（美元）</span><input v-model.number="limitsForm.limit5h" type="number" step="0.01" min="0.01" max="1000000" required placeholder="例如 25" /><small>上游原生 rate_limit_5h，需大于 0</small></label>
+        <label class="field"><span>7 天限额（美元）</span><input v-model.number="limitsForm.limit7d" type="number" step="0.01" min="0.01" max="1000000" required placeholder="例如 150" /><small>上游原生 rate_limit_7d，需大于 0</small></label>
+      </form>
+      <template #footer>
+        <button class="secondary-button" type="button" :disabled="savingLimits" @click="limitsModalOpen = false">取消</button>
+        <button class="primary-button" type="submit" form="limits-form" :disabled="savingLimits"><span v-if="savingLimits" class="spinner"></span><Save v-else :size="16" />{{ savingLimits ? '正在保存' : '保存限额' }}</button>
+      </template>
+    </ModalDialog>
+
+    <ModalDialog :open="confirmDialog.open" :title="confirmDialog.title" :description="confirmDialog.description" @close="closeConfirm">
+      <ul v-if="confirmDialog.points.length" class="confirm-points">
+        <li v-for="point in confirmDialog.points" :key="point"><CircleAlert :size="14" /><span>{{ point }}</span></li>
+      </ul>
+      <template #footer>
+        <button class="secondary-button" type="button" @click="closeConfirm">取消</button>
+        <button class="primary-button" type="button" @click="runConfirm"><RotateCcw :size="16" />{{ confirmDialog.confirmLabel }}</button>
+      </template>
+    </ModalDialog>
   </AppShell>
 </template>

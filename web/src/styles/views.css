@@ -192,6 +192,19 @@
 }
 .form-section > .text-button { justify-self: start; }
 
+/* ── 二次确认清单 ─────────────────────────────────────────────── */
+
+.confirm-points { display: grid; gap: 9px; list-style: none; }
+.confirm-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.confirm-points svg { flex: none; margin-top: 2px; color: var(--terracotta); }
+
 /* ── 批量重置进度 ─────────────────────────────────────────────── */
 
 .quota-job {

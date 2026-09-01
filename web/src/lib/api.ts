@@ -80,6 +80,7 @@ export const api = {
   deleteUser: (id: AdminUser['id']) => request<void>(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   resetUserPassword: (id: AdminUser['id'], password: string) => request<void>(`/api/admin/users/${encodeURIComponent(id)}/password`, { method: 'PUT', body: json({ password }) }),
   resetUserQuota: (id: AdminUser['id']) => request<{ snapshot_updated?: boolean }>(`/api/admin/users/${encodeURIComponent(id)}/quota-reset`, { method: 'POST', body: json({}) }),
+  setUserLimits: (id: AdminUser['id'], limit5h: number, limit7d: number) => request<{ snapshot_updated?: boolean; warning_code?: string }>(`/api/admin/users/${encodeURIComponent(id)}/limits`, { method: 'PUT', body: json({ rate_limit_5h: limit5h, rate_limit_7d: limit7d }) }),
   createQuotaReset: () => request<QuotaResetJob>('/api/admin/quota-resets', { method: 'POST', body: json({ scope: 'all_non_deleted' }) }),
   currentQuotaReset: () => request<QuotaResetJob>('/api/admin/quota-resets/current'),
   quotaReset: (id: QuotaResetJob['id']) => request<QuotaResetJob>(`/api/admin/quota-resets/${encodeURIComponent(id)}`),

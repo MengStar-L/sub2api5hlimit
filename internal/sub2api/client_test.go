@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -260,6 +261,104 @@ func TestResetAPIKeyRateLimitUsageValidatesIDAndResponse(t *testing.T) {
 	var schemaError *SchemaError
 	if !errors.As(err, &schemaError) {
 		t.Fatalf("error = %v, want SchemaError", err)
+	}
+}
+
+func TestSetAPIKeyRateLimitsSendsOnlyLimitsAndNarrowsResult(t *testing.T) {
+	t.Parallel()
+
+	rawKey := "sk-limit-response-sentinel-abcd"
+	lastIP := "203.0.113.91"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/admin/api-keys/42" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		// Only the two limits may be sent: any extra field would risk clearing
+		// unrelated upstream key state such as name, status or expiry.
+		if !reflect.DeepEqual(request, map[string]any{"rate_limit_5h": 25.0, "rate_limit_7d": 150.0}) {
+			t.Errorf("request body = %#v", request)
+		}
+		writeEnvelope(t, w, map[string]any{
+			"api_key": map[string]any{
+				"id": 42, "key": rawKey, "last_used_ip": lastIP,
+				"rate_limit_5h": 25, "rate_limit_7d": 150,
+				"usage_5h": 4.5, "usage_7d": 30.25,
+				"reset_5h_at": nil, "reset_7d_at": nil, "updated_at": "2026-09-01T10:00:00Z",
+			},
+		})
+	}))
+	defer server.Close()
+
+	result, err := testClient(t, server.URL, Config{}).SetAPIKeyRateLimits(context.Background(), 42, 25, 150)
+	if err != nil {
+		t.Fatalf("SetAPIKeyRateLimits() error = %v", err)
+	}
+	if result.ID != 42 || result.RateLimit5h != 25 || result.RateLimit7d != 150 {
+		t.Fatalf("result limits = %#v", result)
+	}
+	// Usage must be carried through so the caller never renders a new limit
+	// beside a stale used value.
+	if result.Usage5h != 4.5 || result.Usage7d != 30.25 {
+		t.Fatalf("result usage = %#v", result)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sentinel := range []string{rawKey, lastIP} {
+		if strings.Contains(string(encoded), sentinel) {
+			t.Fatalf("safe limit output leaked %q: %s", sentinel, encoded)
+		}
+	}
+}
+
+// An upstream that answers 200 while ignoring the limit fields must not be
+// reported as a successful change, otherwise the portal would show a limit the
+// upstream is not enforcing.
+func TestSetAPIKeyRateLimitsRejectsUnappliedChange(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeEnvelope(t, w, map[string]any{
+			"api_key": map[string]any{"id": 42, "rate_limit_5h": 10, "rate_limit_7d": 150},
+		})
+	}))
+	defer server.Close()
+
+	_, err := testClient(t, server.URL, Config{}).SetAPIKeyRateLimits(context.Background(), 42, 25, 150)
+	var schemaError *SchemaError
+	if !errors.As(err, &schemaError) {
+		t.Fatalf("error = %v, want SchemaError for an unapplied limit", err)
+	}
+}
+
+func TestSetAPIKeyRateLimitsValidatesArguments(t *testing.T) {
+	t.Parallel()
+
+	client := testClient(t, "http://127.0.0.1:1", Config{})
+	cases := []struct {
+		name             string
+		keyID            int64
+		limit5h, limit7d float64
+	}{
+		{"non-positive id", 0, 25, 150},
+		{"zero 5h limit", 42, 0, 150},
+		{"zero 7d limit", 42, 25, 0},
+		{"negative 5h limit", 42, -1, 150},
+		{"absurd 5h limit", 42, 1e18, 150},
+		{"NaN 5h limit", 42, math.NaN(), 150},
+		{"infinite 7d limit", 42, 25, math.Inf(1)},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if _, err := client.SetAPIKeyRateLimits(context.Background(), testCase.keyID, testCase.limit5h, testCase.limit7d); err == nil {
+				t.Fatalf("SetAPIKeyRateLimits(%v) accepted an invalid argument", testCase)
+			}
+		})
 	}
 }
 

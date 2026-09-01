@@ -20,7 +20,7 @@ const saving = ref(false)
 
 const filtered = computed(() => accounts.value.filter(account => {
   const text = query.value.trim().toLowerCase()
-  const label = `${account.masked_account || account.account || account.display_name || account.alias || ''} ${account.provider || ''}`.toLowerCase()
+  const label = `${account.masked_account || account.account || account.alias || ''} ${account.display_name || ''} ${account.provider || ''}`.toLowerCase()
   return (!text || label.includes(text)) && (visibility.value === 'all' || (visibility.value === 'published' ? account.published : !account.published))
 }))
 const allSelected = computed(() => filtered.value.length > 0 && filtered.value.every(account => selected.value.has(String(account.id))))
@@ -68,10 +68,11 @@ onMounted(() => void load())
       <EmptyState v-else-if="filtered.length === 0" title="没有匹配的账号" description="等待上游账号同步，或调整当前筛选。" />
       <div v-else class="responsive-table">
         <table class="data-table">
-          <thead><tr><th><button class="checkbox-button" type="button" :aria-label="allSelected ? '取消全选' : '全选'" @click="toggleAll"><CheckSquare :size="16" :class="{ checked: allSelected }" /></button></th><th>账号</th><th>状态</th><th>5h</th><th>7d</th><th>数据时间</th><th>用户可见</th></tr></thead>
+          <thead><tr><th><button class="checkbox-button" type="button" :aria-label="allSelected ? '取消全选' : '全选'" @click="toggleAll"><CheckSquare :size="16" :class="{ checked: allSelected }" /></button></th><th>名称</th><th>账号</th><th>状态</th><th>5h</th><th>7d</th><th>数据时间</th><th>用户可见</th></tr></thead>
           <TransitionGroup tag="tbody" name="row">
             <tr v-for="account in filtered" :key="account.id" :class="{ selected: selected.has(String(account.id)) }">
               <td data-label="选择"><button class="checkbox-button" type="button" :aria-label="`选择 ${name(account)}`" @click="toggle(account.id)"><CheckSquare :size="16" :class="{ checked: selected.has(String(account.id)) }" /></button></td>
+              <td data-label="名称"><span class="pool-name">{{ account.display_name || '—' }}</span></td>
               <td data-label="账号"><div class="identity"><span class="provider-dot" :class="`provider-${(account.provider || 'generic').toLowerCase()}`"></span><div><strong class="mono">{{ name(account) }}</strong><small>{{ account.provider || '未知 Provider' }}</small></div></div></td>
               <td data-label="状态"><StatusPill :status="account.status || 'active'" :stale="account.snapshot?.stale" /></td>
               <td data-label="5h"><QuotaBand label="5h" kind="pool" accent="mint" dense :window="account.window_5h || account.usage_5h" /></td>

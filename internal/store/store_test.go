@@ -541,6 +541,61 @@ func openTestStore(t *testing.T) (*Store, string) {
 	return store, path
 }
 
+func TestApplyKeyLimitChangePreservesIdentityAndRecomputesState(t *testing.T) {
+	ctx := context.Background()
+	store, _ := openTestStore(t)
+	snapshot := compliantSnapshot(101)
+	snapshot.Status = "inactive"
+	user, err := store.CreateUser(ctx, "user", "User", "hash", &snapshot, 1)
+	if err != nil {
+		t.Fatalf("CreateUser error = %v", err)
+	}
+	if user.Binding.BindingState != "upstream_inactive" {
+		t.Fatalf("initial binding_state = %q, expected upstream_inactive", user.Binding.BindingState)
+	}
+	newLimit5h, newLimit7d := 15.5, 120.0
+	newUsage5h, newUsage7d := 3.2, 45.1
+	now := time.Now().Unix()
+	reset5h, reset7d := now+3*3600, now+5*86400
+	err = store.ApplyKeyLimitChange(ctx, 101, newLimit5h, newLimit7d, newUsage5h, newUsage7d,
+		&reset5h, &reset7d, &now, now, 1)
+	if err != nil {
+		t.Fatalf("ApplyKeyLimitChange error = %v", err)
+	}
+	binding, err := store.BindingByUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binding.RateLimit5h != newLimit5h || binding.RateLimit7d != newLimit7d {
+		t.Fatalf("limits after change = 5h:%v 7d:%v, want 5h:%v 7d:%v",
+			binding.RateLimit5h, binding.RateLimit7d, newLimit5h, newLimit7d)
+	}
+	if binding.Usage5h != newUsage5h || binding.Usage7d != newUsage7d {
+		t.Fatalf("usage after change = 5h:%v 7d:%v, want 5h:%v 7d:%v",
+			binding.Usage5h, binding.Usage7d, newUsage5h, newUsage7d)
+	}
+	if binding.UpstreamStatus != "inactive" {
+		t.Fatalf("upstream status changed to %q, should stay inactive", binding.UpstreamStatus)
+	}
+	// With both positive limits but upstream inactive, binding_state must be
+	// upstream_inactive rather than healthy.
+	if binding.BindingState != "upstream_inactive" {
+		t.Fatalf("binding_state = %q after limit change, want upstream_inactive", binding.BindingState)
+	}
+	// Now simulate the next sync finding the key active again: the limit change
+	// shouldn't have overridden binding_state permanently.
+	snapshot.Status = "active"
+	snapshot.RateLimit5h = newLimit5h
+	snapshot.RateLimit7d = newLimit7d
+	if err := store.ApplyKeySnapshots(ctx, []KeySnapshot{snapshot}, now+10); err != nil {
+		t.Fatal(err)
+	}
+	binding, _ = store.BindingByUser(ctx, user.ID)
+	if binding.BindingState != "healthy" {
+		t.Fatalf("binding_state = %q after upstream reactivation, want healthy", binding.BindingState)
+	}
+}
+
 func compliantSnapshot(id int64) KeySnapshot {
 	return KeySnapshot{
 		UpstreamKeyID: id,

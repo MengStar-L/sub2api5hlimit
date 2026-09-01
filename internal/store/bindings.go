@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -171,6 +172,53 @@ func (s *Store) ApplyKeySnapshots(ctx context.Context, snapshots []KeySnapshot, 
 		}
 	}
 	return tx.Commit()
+}
+
+// ApplyKeyLimitChange stores the limits and usage echoed by a confirmed
+// upstream limit change, so the next key-list sync is not required before the
+// admin sees the new limits. Identity, status and the masked key stay anchored
+// to the existing binding exactly as they do for a quota reset.
+//
+// binding_state is recomputed from the new limits rather than forced to
+// healthy: a key whose upstream status is inactive must not be relabelled as
+// healthy just because its limits were edited.
+func (s *Store) ApplyKeyLimitChange(ctx context.Context, keyID int64, limit5h, limit7d, usage5h, usage7d float64, reset5h, reset7d, sourceUpdatedAt *int64, appliedAt, actorUserID int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var userID int64
+	var upstreamStatus string
+	err = tx.QueryRowContext(ctx, `SELECT user_id, upstream_status FROM key_bindings WHERE upstream_key_id=?`, keyID).
+		Scan(&userID, &upstreamStatus)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	state := bindingState(KeySnapshot{Status: upstreamStatus, RateLimit5h: limit5h, RateLimit7d: limit7d})
+	if _, err := tx.ExecContext(ctx, `UPDATE key_bindings SET
+	      rate_limit_5h=?, rate_limit_7d=?, usage_5h=?, reset_5h_at=?, usage_7d=?, reset_7d_at=?,
+	      binding_state=?, source_updated_at=?, last_success_at=?, last_error_code='', updated_at=?
+	      WHERE upstream_key_id=?`,
+		limit5h, limit7d, usage5h, nullInt(reset5h), usage7d, nullInt(reset7d),
+		state, nullInt(sourceUpdatedAt), appliedAt, appliedAt, keyID); err != nil {
+		return err
+	}
+	metadata := fmt.Sprintf(`{"upstream_key_id":%d,"rate_limit_5h":%s,"rate_limit_7d":%s}`,
+		keyID, formatUSD(limit5h), formatUSD(limit7d))
+	if err := addAudit(ctx, tx, actorUserID, "binding.limits.set", "user", fmt.Sprint(userID), metadata); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// formatUSD renders a limit for the audit trail without scientific notation,
+// which would not survive a JSON round trip as a number.
+func formatUSD(value float64) string {
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
 func (s *Store) MarkKeySyncFailed(ctx context.Context, code string) error {

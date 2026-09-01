@@ -377,6 +377,35 @@ type fakeUpstreamManager struct {
 	clearKeysOnRotate bool
 	resets            []int64
 	resetFn           func(context.Context, int64) (QuotaResetResult, error)
+	limitCalls        []fakeLimitCall
+	limitFn           func(context.Context, int64, float64, float64, int64) (KeyLimitResult, error)
+}
+
+type fakeLimitCall struct {
+	KeyID       int64
+	RateLimit5h float64
+	RateLimit7d float64
+	ActorUserID int64
+}
+
+func (f *fakeUpstreamManager) SetKeyLimits(ctx context.Context, keyID int64, limit5h, limit7d float64, actorUserID int64) (KeyLimitResult, error) {
+	f.mu.Lock()
+	f.limitCalls = append(f.limitCalls, fakeLimitCall{KeyID: keyID, RateLimit5h: limit5h, RateLimit7d: limit7d, ActorUserID: actorUserID})
+	limitFn := f.limitFn
+	f.mu.Unlock()
+	if limitFn != nil {
+		return limitFn(ctx, keyID, limit5h, limit7d, actorUserID)
+	}
+	return KeyLimitResult{
+		UpstreamKeyID: keyID, Applied: true, SnapshotUpdated: true,
+		RateLimit5h: limit5h, RateLimit7d: limit7d,
+	}, nil
+}
+
+func (f *fakeUpstreamManager) limitCallsSnapshot() []fakeLimitCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeLimitCall(nil), f.limitCalls...)
 }
 
 func (f *fakeUpstreamManager) ResetQuota(ctx context.Context, keyID int64) (QuotaResetResult, error) {

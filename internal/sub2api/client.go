@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -241,6 +242,68 @@ func (c *Client) ResetAPIKeyRateLimitUsage(ctx context.Context, keyID int64) (AP
 		UpdatedAt: response.APIKey.UpdatedAt,
 	}, nil
 }
+
+// SetAPIKeyRateLimits changes the native 5h and 7d limits of one API key. It
+// sends only the two limit fields, so the upstream key's name, status, group,
+// expiry and accumulated usage are left untouched.
+//
+// The upstream returning 200 is not treated as proof of application: a build
+// that silently ignores unknown or read-only fields would otherwise be reported
+// to the admin as a successful change. The echoed limits must match the request
+// before this returns without error.
+func (c *Client) SetAPIKeyRateLimits(ctx context.Context, keyID int64, limit5h, limit7d float64) (APIKeyLimits, error) {
+	if keyID <= 0 {
+		return APIKeyLimits{}, fmt.Errorf("sub2api API key ID must be positive")
+	}
+	if err := validateLimit("5h", limit5h); err != nil {
+		return APIKeyLimits{}, err
+	}
+	if err := validateLimit("7d", limit7d); err != nil {
+		return APIKeyLimits{}, err
+	}
+	request := struct {
+		RateLimit5h float64 `json:"rate_limit_5h"`
+		RateLimit7d float64 `json:"rate_limit_7d"`
+	}{RateLimit5h: limit5h, RateLimit7d: limit7d}
+	var response struct {
+		APIKey *apiKeyLimitsDTO `json:"api_key"`
+	}
+	endpoint := "/api/v1/admin/api-keys/" + strconv.FormatInt(keyID, 10)
+	if err := c.doJSON(ctx, http.MethodPut, endpoint, nil, request, &response); err != nil {
+		return APIKeyLimits{}, err
+	}
+	if response.APIKey == nil || response.APIKey.ID <= 0 || response.APIKey.ID != keyID {
+		return APIKeyLimits{}, &SchemaError{Detail: "limit response API key id is invalid"}
+	}
+	if !sameLimit(response.APIKey.RateLimit5h, limit5h) || !sameLimit(response.APIKey.RateLimit7d, limit7d) {
+		return APIKeyLimits{}, &SchemaError{
+			Detail: "upstream accepted the request but did not apply the requested limits",
+		}
+	}
+	return APIKeyLimits{
+		ID: response.APIKey.ID, RateLimit5h: response.APIKey.RateLimit5h, RateLimit7d: response.APIKey.RateLimit7d,
+		Usage5h: response.APIKey.Usage5h, Usage7d: response.APIKey.Usage7d,
+		Reset5hAt: response.APIKey.Reset5hAt, Reset7dAt: response.APIKey.Reset7dAt,
+		UpdatedAt: response.APIKey.UpdatedAt,
+	}, nil
+}
+
+// maxRateLimitUSD bounds a mistyped limit before it reaches the upstream. The
+// portal requires both windows to stay positive, so zero is rejected too.
+const maxRateLimitUSD = 1_000_000
+
+func validateLimit(window string, value float64) error {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return fmt.Errorf("sub2api %s limit must be a finite number", window)
+	}
+	if value <= 0 || value > maxRateLimitUSD {
+		return fmt.Errorf("sub2api %s limit must be between 0 and %d USD", window, maxRateLimitUSD)
+	}
+	return nil
+}
+
+// sameLimit compares two USD limits after a JSON float round trip.
+func sameLimit(got, want float64) bool { return math.Abs(got-want) < 1e-6 }
 
 func (c *Client) ListAccounts(ctx context.Context) ([]Account, error) {
 	return paginate[accountDTO](ctx, c, "/api/v1/admin/accounts", func(raw *accountDTO) (Account, error) {
@@ -502,6 +565,19 @@ type apiKeyDTO struct {
 	Window7dStart *time.Time `json:"window_7d_start"`
 	Reset5hAt     *time.Time `json:"reset_5h_at"`
 	Reset7dAt     *time.Time `json:"reset_7d_at"`
+}
+
+// apiKeyLimitsDTO, like apiKeyResetDTO, cannot represent the key or the
+// last-used IP that the official admin endpoint returns alongside these fields.
+type apiKeyLimitsDTO struct {
+	ID          int64      `json:"id"`
+	RateLimit5h float64    `json:"rate_limit_5h"`
+	RateLimit7d float64    `json:"rate_limit_7d"`
+	Usage5h     float64    `json:"usage_5h"`
+	Usage7d     float64    `json:"usage_7d"`
+	Reset5hAt   *time.Time `json:"reset_5h_at"`
+	Reset7dAt   *time.Time `json:"reset_7d_at"`
+	UpdatedAt   *time.Time `json:"updated_at"`
 }
 
 // apiKeyResetDTO intentionally omits key and last_used_ip even though the

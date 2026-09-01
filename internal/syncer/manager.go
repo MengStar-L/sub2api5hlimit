@@ -186,6 +186,56 @@ func (m *Manager) ResetQuota(ctx context.Context, keyID int64) (httpapi.QuotaRes
 	return result, nil
 }
 
+// SetKeyLimits changes the native 5h and 7d limits of one upstream key and
+// persists the echoed snapshot under the same guards ResetQuota uses. The HTTP
+// workflow still triggers a complete key-list sync to reconcile the remaining
+// key metadata.
+func (m *Manager) SetKeyLimits(ctx context.Context, keyID int64, limit5h, limit7d float64, actorUserID int64) (httpapi.KeyLimitResult, error) {
+	result := httpapi.KeyLimitResult{UpstreamKeyID: keyID}
+	connectionGeneration, settings, err := m.connectionSettings(ctx)
+	if err != nil {
+		return result, err
+	}
+	client, err := newClient(settings)
+	if err != nil {
+		return result, err
+	}
+	limits, err := client.SetAPIKeyRateLimits(ctx, keyID, limit5h, limit7d)
+	if err != nil {
+		return result, err
+	}
+	result.Applied = true
+	result.RateLimit5h = limits.RateLimit5h
+	result.RateLimit7d = limits.RateLimit7d
+	result.Usage5h = limits.Usage5h
+	result.Usage7d = limits.Usage7d
+	result.Reset5hAt = store.UnixPtr(limits.Reset5hAt)
+	result.Reset7dAt = store.UnixPtr(limits.Reset7dAt)
+	result.SourceUpdatedAt = store.UnixPtr(limits.UpdatedAt)
+	appliedAt := time.Now().Unix()
+	m.connectionMu.Lock()
+	if connectionGeneration != m.connectionGeneration {
+		m.connectionMu.Unlock()
+		return result, fmt.Errorf("upstream connection changed after confirmed limit change")
+	}
+	m.keySnapshotMu.Lock()
+	m.keyGeneration++
+	// A keys sync that started before this confirmed mutation must not publish
+	// its old limits, and the caller's reconciliation must start a new flight.
+	m.group.Forget("keys")
+	if err := m.store.ApplyKeyLimitChange(ctx, keyID, result.RateLimit5h, result.RateLimit7d,
+		result.Usage5h, result.Usage7d, result.Reset5hAt, result.Reset7dAt, result.SourceUpdatedAt,
+		appliedAt, actorUserID); err != nil {
+		m.keySnapshotMu.Unlock()
+		m.connectionMu.Unlock()
+		return result, fmt.Errorf("persist confirmed limit change: %w", err)
+	}
+	m.keySnapshotMu.Unlock()
+	m.connectionMu.Unlock()
+	result.SnapshotUpdated = true
+	return result, nil
+}
+
 func (m *Manager) syncOne(ctx context.Context, scope string) error {
 	connectionGeneration, settings, err := m.connectionSettings(ctx)
 	if err != nil {

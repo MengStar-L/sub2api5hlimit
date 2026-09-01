@@ -79,6 +79,21 @@ type APIKeyReset struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
+// APIKeyLimits is the allowlisted result of an upstream limit change. Usage is
+// included because changing a limit does not change usage: the caller persists
+// the echoed pair so the portal never renders a new limit beside a stale used
+// value.
+type APIKeyLimits struct {
+	ID          int64      `json:"id"`
+	RateLimit5h float64    `json:"rate_limit_5h"`
+	RateLimit7d float64    `json:"rate_limit_7d"`
+	Usage5h     float64    `json:"usage_5h"`
+	Usage7d     float64    `json:"usage_7d"`
+	Reset5hAt   *time.Time `json:"reset_5h_at"`
+	Reset7dAt   *time.Time `json:"reset_7d_at"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+}
+
 // HasRequiredLimits reports whether both portal-required windows are enabled.
 func (k APIKey) HasRequiredLimits() bool {
 	return k.RateLimit5h > 0 && k.RateLimit7d > 0
