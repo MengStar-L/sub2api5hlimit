@@ -40,6 +40,7 @@ type Server struct {
 	maintenanceMu  sync.Mutex
 	bindingMu      sync.RWMutex
 	updates        UpdateManager
+	codex          CodexForecastProvider
 }
 
 type contextKey string
@@ -77,6 +78,8 @@ func (s *Server) Handler() http.Handler                  { return securityHeader
 func (s *Server) MountFrontend(frontend http.Handler)    { s.mux.Handle("/", frontend) }
 func (s *Server) SetUpdateManager(manager UpdateManager) { s.updates = manager }
 
+func (s *Server) SetCodexForecastProvider(provider CodexForecastProvider) { s.codex = provider }
+
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.health)
 	s.mux.HandleFunc("GET /readyz", s.ready)
@@ -88,6 +91,9 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/auth/session", s.requireAuth(http.HandlerFunc(s.sessionView)))
 	s.mux.Handle("PUT /api/auth/password", s.requireAuth(http.HandlerFunc(s.changePassword)))
 	s.mux.Handle("GET /api/me/dashboard", s.requireRole(store.RoleUser, http.HandlerFunc(s.dashboard)))
+	s.mux.Handle("GET /api/me/announcements", s.requireAuth(http.HandlerFunc(s.myAnnouncements)))
+	s.mux.Handle("POST /api/me/announcements/{id}/dismiss", s.requireAuth(http.HandlerFunc(s.dismissAnnouncement)))
+	s.mux.Handle("GET /api/codex-forecast", s.requireAuth(http.HandlerFunc(s.codexForecast)))
 
 	s.mux.Handle("GET /api/admin/users", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.listUsers)))
 	s.mux.Handle("POST /api/admin/users", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.createUser)))
@@ -106,6 +112,10 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/admin/update", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.updateStatus)))
 	s.mux.Handle("POST /api/admin/update/check", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.checkUpdate)))
 	s.mux.Handle("POST /api/admin/update/apply", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.applyUpdate)))
+	s.mux.Handle("GET /api/admin/announcements", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.listAnnouncements)))
+	s.mux.Handle("POST /api/admin/announcements", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.createAnnouncement)))
+	s.mux.Handle("PUT /api/admin/announcements/{id}", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.updateAnnouncement)))
+	s.mux.Handle("DELETE /api/admin/announcements/{id}", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.deleteAnnouncement)))
 	s.mux.Handle("POST /api/admin/quota-resets", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.createQuotaResetJob)))
 	s.mux.Handle("GET /api/admin/quota-resets/current", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.currentQuotaResetJob)))
 	s.mux.Handle("GET /api/admin/quota-resets/{id}", s.requireRole(store.RoleAdmin, http.HandlerFunc(s.quotaResetJob)))

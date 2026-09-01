@@ -188,6 +188,53 @@ export interface UpstreamKey {
   status?: string
 }
 
+export interface Announcement {
+  id: number | string
+  title: string
+  body: string
+  published_at: number | string
+  created_by_user_id?: number | string | null
+  created_at?: number | string
+  updated_at?: number | string
+  dismissed?: boolean
+}
+
+export interface AnnouncementFeed {
+  announcements: Announcement[]
+  popup?: Announcement | null
+  unread_count: number
+}
+
+export interface CodexForecastBreakdown {
+  label: string
+  points: number
+}
+
+export interface CodexForecast {
+  score: number
+  breakdown?: CodexForecastBreakdown[]
+  horizon_hours?: number
+  days_since_reset?: number | null
+  hours_since_reset?: number | null
+  latest_reset_at?: number | null
+  reset_announced?: boolean
+  forecast_state?: string
+  evidence_tier?: string
+  model_version?: string
+  source_fetched_at?: number | null
+  next_refresh_at?: number | null
+  checked_at?: number | null
+  last_success_at?: number | null
+  last_error_code?: string
+  updated_at?: number
+}
+
+export interface CodexForecastView {
+  forecast: CodexForecast
+  source_url: string
+  disclaimer: string
+}
+
 export interface ConnectionSettings {
   base_url: string
   owner_user_id: number | string

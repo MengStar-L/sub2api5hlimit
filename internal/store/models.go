@@ -193,3 +193,39 @@ func UnixPtr(t *time.Time) *int64 {
 	value := t.Unix()
 	return &value
 }
+
+type Announcement struct {
+	ID              int64  `json:"id"`
+	Title           string `json:"title"`
+	Body            string `json:"body"`
+	PublishedAt     int64  `json:"published_at"`
+	CreatedByUserID *int64 `json:"created_by_user_id,omitempty"`
+	CreatedAt       int64  `json:"created_at"`
+	UpdatedAt       int64  `json:"updated_at"`
+	// 仅在按用户读取时填充：该用户是否已选择不再弹出
+	Dismissed bool `json:"dismissed"`
+}
+
+type CodexForecastBreakdown struct {
+	Label  string `json:"label"`
+	Points int    `json:"points"`
+}
+
+type CodexForecastState struct {
+	Score           int                      `json:"score"`
+	Breakdown       []CodexForecastBreakdown `json:"breakdown"`
+	HorizonHours    int                      `json:"horizon_hours"`
+	DaysSinceReset  *int64                   `json:"days_since_reset,omitempty"`
+	HoursSinceReset *float64                 `json:"hours_since_reset,omitempty"`
+	LatestResetAt   *int64                   `json:"latest_reset_at,omitempty"`
+	ResetAnnounced  bool                     `json:"reset_announced"`
+	ForecastState   string                   `json:"forecast_state,omitempty"`
+	EvidenceTier    string                   `json:"evidence_tier,omitempty"`
+	ModelVersion    string                   `json:"model_version,omitempty"`
+	SourceFetchedAt *int64                   `json:"source_fetched_at,omitempty"`
+	NextRefreshAt   *int64                   `json:"next_refresh_at,omitempty"`
+	CheckedAt       *int64                   `json:"checked_at,omitempty"`
+	LastSuccessAt   *int64                   `json:"last_success_at,omitempty"`
+	LastErrorCode   string                   `json:"last_error_code,omitempty"`
+	UpdatedAt       int64                    `json:"updated_at"`
+}

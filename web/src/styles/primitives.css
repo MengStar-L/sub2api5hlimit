@@ -165,6 +165,8 @@
   box-shadow: 0 0 0 3px var(--plum-soft);
 }
 .field input[type="password"] { font-family: var(--font-mono); letter-spacing: .06em; }
+/* 多行输入需要纵向内边距，且只允许竖向拉伸 */
+.field textarea { padding: 10px 12px; line-height: 1.65; resize: vertical; }
 
 .select-control {
   width: auto;

@@ -2,10 +2,14 @@
 import { computed, ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import {
-  Activity, Users, ServerCog, Settings2, LogOut, Menu, X, ShieldCheck, ChevronRight, Download,
+  Activity, Users, ServerCog, Settings2, LogOut, Menu, X, ShieldCheck, ChevronRight, Download, Megaphone,
 } from 'lucide-vue-next'
 import BrandMark from '@/components/BrandMark.vue'
+import AnnouncementCenter from '@/components/AnnouncementCenter.vue'
+import CodexForecastChip from '@/components/CodexForecastChip.vue'
 import { sessionStore } from '@/state/session'
+import { announcementStore } from '@/state/announcements'
+import { codexStore } from '@/state/codex'
 
 const router = useRouter()
 const mobileOpen = ref(false)
@@ -14,6 +18,7 @@ const baseItems = [{ to: '/dashboard', label: '配额概览', icon: Activity }]
 const adminItems = [
   { to: '/admin/users', label: '用户管理', icon: Users },
   { to: '/admin/pool', label: '账号池', icon: ServerCog },
+  { to: '/admin/announcements', label: '公告发布', icon: Megaphone },
   { to: '/admin/settings', label: '连接设置', icon: Settings2 },
   { to: '/admin/update', label: '程序更新', icon: Download },
 ]
@@ -21,6 +26,8 @@ const items = computed(() => sessionStore.isAdmin.value ? adminItems : baseItems
 const displayName = computed(() => sessionStore.user.value?.display_name || sessionStore.user.value?.username || '用户')
 
 async function logout() {
+  announcementStore.reset()
+  codexStore.reset()
   await sessionStore.signOut()
   await router.replace('/login')
 }
@@ -41,6 +48,10 @@ async function logout() {
           <ChevronRight class="nav-arrow" :size="14" />
         </RouterLink>
       </nav>
+      <div class="sidebar-aside">
+        <AnnouncementCenter />
+        <CodexForecastChip />
+      </div>
       <div class="sidebar-foot">
         <div class="security-note"><ShieldCheck :size="15" /><span>Key 全程脱敏显示</span></div>
         <span class="live-indicator"><i></i>服务在线</span>
@@ -61,7 +72,7 @@ async function logout() {
     </div>
 
     <nav class="mobile-nav" aria-label="移动端导航">
-      <RouterLink v-for="item in items.slice(0, 4)" :key="item.to" :to="item.to">
+      <RouterLink v-for="item in items.slice(0, 5)" :key="item.to" :to="item.to">
         <component :is="item.icon" :size="18" /><span>{{ item.label.replace('管理', '') }}</span>
       </RouterLink>
     </nav>

@@ -67,14 +67,15 @@
   font-weight: 600;
 }
 .sidebar nav a.router-link-active svg:first-child { color: var(--plum); }
+/* 彩条贴激活项自身左缘，高度跟随文字行高，避免被侧栏内边距推离文字 */
 .sidebar nav a.router-link-active::before {
   content: "";
   position: absolute;
-  left: -16px;
+  left: 0;
   top: 50%;
   width: 3px;
   height: 20px;
-  border-radius: 0 99px 99px 0;
+  border-radius: 99px;
   background: var(--plum);
   transform: translateY(-50%);
   animation: slide-in var(--dur-2) var(--ease-out) both;
@@ -213,7 +214,8 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
-  align-items: start;
+  /* 只有标题时整行居中；带副文案时才顶对齐 */
+  align-items: center;
   padding: 11px 12px;
   background: var(--paper-raised);
   border: 1px solid var(--line);
@@ -222,7 +224,9 @@
   box-shadow: var(--shadow-lg);
   pointer-events: auto;
 }
-.toast-item > svg { margin-top: 1px; color: var(--tone, var(--indigo)); }
+.toast-item:has(p) { align-items: start; }
+.toast-item > svg { color: var(--tone, var(--indigo)); }
+.toast-item:has(p) > svg { margin-top: 1px; }
 .toast-item strong { font-size: 13px; font-weight: 600; }
 .toast-item p { font-size: 12px; color: var(--muted); }
 .toast-item > div { display: grid; gap: 2px; min-width: 0; }

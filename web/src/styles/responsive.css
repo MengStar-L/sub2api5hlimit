@@ -24,7 +24,6 @@
   }
   .sidebar.open { transform: none; }
   .sidebar-close { display: inline-flex; }
-  .sidebar nav a.router-link-active::before { left: -16px; }
 
   .sidebar-scrim {
     display: block;
@@ -70,12 +69,20 @@
     display: grid;
     justify-items: center;
     gap: 3px;
+    min-width: 0;
     padding: 7px 2px;
     color: var(--muted);
     border-radius: var(--radius-sm);
     font-size: 10.5px;
     font-weight: 550;
     transition: color var(--dur-2) ease, background-color var(--dur-2) ease;
+  }
+  /* 管理员有 5 个入口，窄屏下标签不能换行撑高整条 */
+  .mobile-nav a span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .mobile-nav a.router-link-active { color: var(--plum); background: var(--plum-soft); }
   .mobile-nav a.router-link-active::before {
@@ -160,6 +167,17 @@
   .update-phases::before { top: 8px; bottom: 8px; left: 7px; right: auto; width: 2px; height: auto; }
   .update-phases > div { grid-template-columns: 15px minmax(0, 1fr); justify-items: start; text-align: left; gap: 12px; align-items: center; }
   .update-phases > div > i { grid-row: span 2; }
+
+  /* Codex 详情：数值与说明改为上下两段，去掉竖分隔线 */
+  .codex-detail { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .codex-gauge {
+    padding-right: 0;
+    padding-bottom: 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .codex-gauge-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .codex-meta > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
 
 /* ── ≤480px ────────────────────────────────────────────────────── */
@@ -177,6 +195,11 @@
   .batch-actions { margin-left: 0; width: 100%; justify-content: space-between; }
   .toast-stack { top: 10px; right: 10px; width: calc(100vw - 20px); }
   .drawer-panel { width: 100vw; }
+  .modal-layer { padding: 12px; }
+  .modal-footer { justify-content: stretch; }
+  .modal-footer > * { flex: 1; }
+  .codex-gauge strong { font-size: 52px; }
+  .codex-gauge-meta { grid-template-columns: minmax(0, 1fr); }
   .auth-statement h1 { font-size: 27px; }
   .quota-ring { width: 50px; height: 50px; }
   .quota-ring .ring-number strong { font-size: 15px; }

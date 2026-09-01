@@ -21,6 +21,8 @@ Sub2API 配额中心（服务名 `sub2api-limit-portal`）是一个独立的 Go 
 - Sub2API Admin API Key 使用 AES-256-GCM 加密后保存；主密钥只来自进程环境，不写入数据库。
 - Key 每 15 秒同步，45 秒无成功结果即标记陈旧；账号清单每 5 分钟同步；已公开账号用量每 60 秒以 `force:false` 刷新。
 - 上游离线时保留最后快照并明确显示数据时间和“陈旧”状态，不把未知值伪装成零。
+- 管理员可发布公告；用户首次登录会自动弹出最新一条未确认公告，确认后不再弹出，公告与发布时间可随时在侧栏回看。
+- 侧栏常驻展示 [willcodexquotareset.com](https://www.willcodexquotareset.com/) 的 Codex 重置预测分值。该数值由第三方站点依据公开信号推算，**属于预测而非官方公告**；后端每 15 分钟代抓一次并缓存，浏览器不直连第三方（门户 CSP 为 `connect-src 'self'`）。抓取失败时保留上一次成功的数值并标注错误码，不清空成已知的零。
 
 ## 兼容性与前置条件
 
@@ -345,6 +347,9 @@ trap - EXIT INT TERM
 | `POST /api/auth/logout` | 注销并撤销当前会话 |
 | `PUT /api/auth/password` | 普通用户或管理员修改自己的密码 |
 | `GET /api/me/dashboard` | 当前用户的 Key 额度与公开账号池快照 |
+| `GET /api/me/announcements` | 公告列表、待自动弹出的最新一条与未确认条数 |
+| `POST /api/me/announcements/:id/dismiss` | 「已了解，不再弹出此公告」，按用户记录且幂等 |
+| `GET /api/codex-forecast` | 缓存的第三方 Codex 重置预测分值、来源地址与预测声明（用户与管理员均可读） |
 | `GET, POST /api/admin/users` | 列出用户；创建用户并绑定 Key |
 | `PUT, DELETE /api/admin/users/:id` | 停用/启用或软删除用户 |
 | `PUT /api/admin/users/:id/password` | 管理员重置密码并撤销该用户全部会话 |
@@ -353,6 +358,8 @@ trap - EXIT INT TERM
 | `GET, PUT /api/admin/pool` | 查看账号池；批量发布或取消发布账号 |
 | `GET, PUT /api/admin/settings` | 查看或更新上游连接设置 |
 | `POST /api/admin/sync` | 手动触发 `all`、`keys`、`accounts` 或 `usage` 同步 |
+| `GET, POST /api/admin/announcements` | 列出全部公告；发布新公告（标题 1-120 字，正文 1-4000 字） |
+| `PUT, DELETE /api/admin/announcements/:id` | 编辑或删除公告（编辑不改变发布时间，也不会重新弹给已确认的用户） |
 | `POST /api/admin/users/:id/quota-reset` | 重置一个绑定用户的上游 Key 原生额度窗口 |
 | `POST /api/admin/quota-resets` | 创建批量额度重置任务 |
 | `GET /api/admin/quota-resets/current` | 查询当前批量重置任务 |
@@ -386,6 +393,7 @@ SnapshotMeta   { as_of, source_updated_at, last_success_at, stale }
 - 管理员额度重置会调用全权限上游接口，并同时清零目标 Key 的 5h、1d 和 7d 原生窗口。批量操作不可撤销，执行前应核对目标集合。
 - 门户不参与请求转发或扣费。攻击者绕过门户仍只能使用真实 Sub2API Key，限额成败完全取决于非 `simple` 模式的 Sub2API。原生并发检查在临界点允许少量超额。
 - 上游被攻陷或返回伪造状态时，门户无法独立验证计费事实；它会把成功解析的上游响应作为快照展示。
+- Codex 重置预测来自不受本项目控制的第三方站点，属于预测而非官方公告，不能作为运维决策依据。后端只解析所需字段，并对分值、字符串长度与时间格式做夹取与截断，但仍应把它当作不可信输入；界面已明确标注来源、获取时间与「不可全信」。
 - 本项目不抵御已取得 root、管理员浏览器会话或 Sub2API 管理权限的攻击者，也不提供 DDoS 防护、MFA、邮件找回、密钥轮换编排或多实例一致性。
 - 更换 Base URL 或固定 Key 所有者前必须先解绑全部用户并取消所有账号发布。设置更新会轮换连接标识并清空旧快照，避免把另一实例中复用的数字 ID 错认成原对象。
 

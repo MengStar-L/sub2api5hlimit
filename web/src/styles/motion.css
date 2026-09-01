@@ -101,6 +101,14 @@
 .drawer-enter-from, .drawer-leave-to { opacity: 0; }
 .drawer-enter-from .drawer-panel, .drawer-leave-to .drawer-panel { transform: translateX(101%); }
 
+/* ── 居中弹窗：遮罩淡入，面板轻微上浮回弹 ── */
+.modal-enter-active, .modal-leave-active { transition: opacity var(--dur-2) ease; }
+.modal-enter-active .modal-panel { transition: transform var(--dur-3) var(--spring), opacity var(--dur-2) ease; }
+.modal-leave-active .modal-panel { transition: transform var(--dur-1) ease-in, opacity var(--dur-1) ease-in; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+.modal-enter-from .modal-panel { opacity: 0; transform: translateY(14px) scale(.97); }
+.modal-leave-to .modal-panel { opacity: 0; transform: translateY(6px) scale(.99); }
+
 /* ── Toast ── */
 .toast-enter-active { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-3) var(--spring); }
 .toast-leave-active { transition: opacity var(--dur-1) ease-in, transform var(--dur-2) var(--ease); position: absolute; right: 0; }

@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/MengStar-L/sub2api5hlimit/internal/codexforecast"
 	"github.com/MengStar-L/sub2api5hlimit/internal/config"
 	"github.com/MengStar-L/sub2api5hlimit/internal/httpapi"
 	"github.com/MengStar-L/sub2api5hlimit/internal/releasecheck"
@@ -100,6 +101,11 @@ func serve() error {
 		return fmt.Errorf("initialize HTTP API: %w", err)
 	}
 	api.SetUpdateManager(updates)
+	codex, err := codexforecast.New(data, logger, codexforecast.Config{})
+	if err != nil {
+		return fmt.Errorf("initialize codex forecast: %w", err)
+	}
+	api.SetCodexForecastProvider(codex)
 	api.MountFrontend(webui.Handler())
 
 	listener, err := net.Listen("tcp", cfg.Listen)
@@ -122,6 +128,7 @@ func serve() error {
 	logger.Info("Sub2API quota center started", "listen", listener.Addr().String(), "version", version)
 	go upstream.Run(ctx)
 	go updates.Run(ctx)
+	go codex.Run(ctx)
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()
